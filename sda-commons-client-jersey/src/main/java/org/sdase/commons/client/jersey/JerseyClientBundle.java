@@ -2,8 +2,12 @@ package org.sdase.commons.client.jersey;
 
 import io.dropwizard.Configuration;
 import io.dropwizard.ConfiguredBundle;
+import io.dropwizard.client.JerseyClientBuilder;
+import io.dropwizard.client.JerseyClientConfiguration;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
+import javax.ws.rs.client.Client;
+import org.sdase.commons.client.jersey.auth.ClientAuthFilterFactory;
 import org.sdase.commons.client.jersey.builder.PlatformClientBuilder;
 import org.sdase.commons.client.jersey.error.ClientRequestExceptionMapper;
 import org.sdase.commons.client.jersey.filter.ContainerRequestContextHolder;
@@ -36,7 +40,13 @@ public class JerseyClientBundle<C extends Configuration> implements ConfiguredBu
 
    @Override
    public void run(C configuration, Environment environment) {
-      this.clientFactory = new ClientFactory(environment, consumerTokenProvider.apply(configuration));
+      JerseyClientConfiguration conf = new JerseyClientConfiguration();
+      conf.setChunkedEncodingEnabled(false);
+      conf.setGzipEnabled(false);
+      Client authClient = new JerseyClientBuilder(environment).using(conf).build("authClient");
+      ClientAuthFilterFactory factory = new ClientAuthFilterFactory(authClient);
+
+      this.clientFactory = new ClientFactory(environment, consumerTokenProvider.apply(configuration), factory);
       environment.jersey().register(ContainerRequestContextHolder.class);
       environment.jersey().register(ClientRequestExceptionMapper.class);
       initialized = true;

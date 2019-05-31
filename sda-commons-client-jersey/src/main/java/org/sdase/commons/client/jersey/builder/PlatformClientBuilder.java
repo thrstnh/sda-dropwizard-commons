@@ -2,6 +2,7 @@ package org.sdase.commons.client.jersey.builder;
 
 import io.dropwizard.client.JerseyClientBuilder;
 import org.apache.commons.lang3.StringUtils;
+import org.sdase.commons.client.jersey.auth.ClientAuthFilterFactory;
 import org.sdase.commons.client.jersey.filter.AddRequestHeaderFilter;
 import org.sdase.commons.client.jersey.filter.AuthHeaderClientFilter;
 import org.sdase.commons.client.jersey.filter.TraceTokenClientFilter;
@@ -14,8 +15,9 @@ public class PlatformClientBuilder extends AbstractBaseClientBuilder<PlatformCli
 
    private Supplier<Optional<String>> consumerTokenSupplier;
 
-   public PlatformClientBuilder(JerseyClientBuilder jerseyClientBuilder, String consumerToken) {
-      super(jerseyClientBuilder);
+   public PlatformClientBuilder(JerseyClientBuilder jerseyClientBuilder,
+         ClientAuthFilterFactory clientAuthFilterFactory, String consumerToken) {
+      super(jerseyClientBuilder, clientAuthFilterFactory);
       this.consumerTokenSupplier = () -> Optional.ofNullable(StringUtils.trimToNull(consumerToken));
       addFilter(new TraceTokenClientFilter());
    }
@@ -48,5 +50,4 @@ public class PlatformClientBuilder extends AbstractBaseClientBuilder<PlatformCli
          }
       });
    }
-
 }

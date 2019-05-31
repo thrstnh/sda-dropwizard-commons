@@ -65,6 +65,7 @@ for the SDA Platform have some magic added that clients for an external service 
         .api(OtherSdaServiceClient.class)
         .atTarget("http://other-sda-service.sda.net/api");
   ```
+
 - _Consumer-Token_
   
   SDA Platform clients are able to send a Consumer-Token header to identify the caller. The token that is used has to be
@@ -84,6 +85,50 @@ for the SDA Platform have some magic added that clients for an external service 
         .atTarget("http://other-sda-service.sda.net/api");
   ```
 
+### Custom Authorization Headers
+
+All client can be configured to add an Authorization header to the request:
+
+  ```java
+  clientFactory.platformClient()
+        .enableAuthentication(authenticationConfiguration)
+        .api(OtherSdaServiceClient.class)
+        .atTarget("http://other-sda-service.sda.net/api");
+  ```
+
+The Bundle provides different header providers:
+
+- [_NoneAuthConfig_](src/main/java/org/sdase/commons/client/jersey/auth/config/NoneAuthConfig.java)
+
+   No Authorization header is set:
+
+   ```yaml
+   clientAuth:
+     type: NONE
+   ```
+
+- [_PassThroughAuthConfig_](src/main/java/org/sdase/commons/client/jersey/auth/config/PassThroughAuthConfig.java)
+
+   Pass through the Authorization header of an incoming request context:
+   
+   ```yaml
+   clientAuth:
+     type: PASS_THROUGH
+   ```
+   
+- [_ClientCredentialsOidcDiscoveryConfig_](src/main/java/org/sdase/commons/client/jersey/auth/config/ClientCredentialsOidcDiscoveryConfig.java)
+
+   Receive an authorization token from an OpenID Connect with the client credentials grant. The OIDC server supports the
+   [OIDC discovery specification](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata).
+   
+   ```yaml
+   clientAuth:
+      type: CLIENT_CREDENTIALS_OPEN_ID_DISCOVERY
+      issuerUrl: http://localhost
+      clientId: my-client-id
+      clientSecret: my-client-secret
+      leewaySeconds: 10
+   ```
 
 ## Writing API Clients as interfaces
 

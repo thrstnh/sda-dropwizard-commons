@@ -2,6 +2,8 @@ package org.sdase.commons.client.jersey.builder;
 
 import io.dropwizard.client.JerseyClientBuilder;
 import org.glassfish.jersey.client.ClientProperties;
+import org.sdase.commons.client.jersey.auth.ClientAuthFilterFactory;
+import org.sdase.commons.client.jersey.auth.config.ClientAuthConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,14 +38,19 @@ abstract class AbstractBaseClientBuilder<T extends AbstractBaseClientBuilder> {
 
    private JerseyClientBuilder jerseyClientBuilder;
 
+   private ClientAuthFilterFactory clientAuthFilterFactory;
+
    private List<ClientRequestFilter> filters;
 
    private int connectionTimeoutMillis;
 
    private int readTimeoutMillis;
 
-   AbstractBaseClientBuilder(JerseyClientBuilder jerseyClientBuilder) {
+   private ClientAuthConfig clientAuthConfig;
+
+   AbstractBaseClientBuilder(JerseyClientBuilder jerseyClientBuilder, ClientAuthFilterFactory clientAuthFilterFactory) {
       this.jerseyClientBuilder = jerseyClientBuilder;
+      this.clientAuthFilterFactory = clientAuthFilterFactory;
       this.filters = new ArrayList<>();
       this.readTimeoutMillis = DEFAULT_READ_TIMEOUT_MS;
       this.connectionTimeoutMillis = DEFAULT_CONNECTION_TIMEOUT_MS;
@@ -106,12 +113,36 @@ abstract class AbstractBaseClientBuilder<T extends AbstractBaseClientBuilder> {
    }
 
    /**
+    * Enables authentication with different configurations.
+    *
+    * @param config
+    *           the configuration to be used to add authentication headers to
+    *           the request
+    * @return this builder instance
+    */
+   public T enableAuthentication(ClientAuthConfig config) {
+      this.clientAuthConfig = config;
+      // noinspection unchecked
+      return (T) this;
+   }
+
+   /**
     * Builds a generic client that can be used for Http requests.
     *
     * @param name the name of the client is used for metrics and thread names
     * @return the client instance
     */
    public Client buildGenericClient(String name) {
+      if (clientAuthConfig != null) {
+         ClientRequestFilter filter = clientAuthFilterFactory
+               .builder()
+               .withClientAuthConfig(clientAuthConfig)
+               .withName(name)
+               .build();
+
+         addFilter(filter);
+      }
+
       Client client = jerseyClientBuilder.build(name);
       filters.forEach(client::register);
       client.property(ClientProperties.CONNECT_TIMEOUT, connectionTimeoutMillis);

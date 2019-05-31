@@ -3,6 +3,7 @@ package org.sdase.commons.client.jersey;
 import io.dropwizard.client.JerseyClientBuilder;
 import io.dropwizard.client.JerseyClientConfiguration;
 import io.dropwizard.setup.Environment;
+import org.sdase.commons.client.jersey.auth.ClientAuthFilterFactory;
 import org.sdase.commons.client.jersey.builder.ExternalClientBuilder;
 import org.sdase.commons.client.jersey.builder.PlatformClientBuilder;
 
@@ -13,10 +14,12 @@ public class ClientFactory {
 
    private final Environment environment;
    private final String consumerToken;
+   private final ClientAuthFilterFactory clientAuthFilterFactory;
 
-   ClientFactory(Environment environment, String consumerToken) {
+   ClientFactory(Environment environment, String consumerToken, ClientAuthFilterFactory clientAuthFilterFactory) {
       this.environment = environment;
       this.consumerToken = consumerToken;
+      this.clientAuthFilterFactory = clientAuthFilterFactory;
    }
 
    /**
@@ -48,7 +51,8 @@ public class ClientFactory {
     * @return a builder to configure the client
     */
    public PlatformClientBuilder platformClient(HttpClientConfiguration httpClientConfiguration) {
-      return new PlatformClientBuilder(createClientBuilder(httpClientConfiguration), consumerToken);
+      return new PlatformClientBuilder(createClientBuilder(httpClientConfiguration), clientAuthFilterFactory,
+            consumerToken);
    }
 
    /**
@@ -92,7 +96,7 @@ public class ClientFactory {
     * @return a builder to configure the client
     */
    public ExternalClientBuilder externalClient(HttpClientConfiguration httpClientConfiguration) {
-      return new ExternalClientBuilder(createClientBuilder(httpClientConfiguration));
+      return new ExternalClientBuilder(createClientBuilder(httpClientConfiguration), clientAuthFilterFactory);
    }
 
    /**
