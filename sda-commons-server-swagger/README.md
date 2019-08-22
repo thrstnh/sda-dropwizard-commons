@@ -252,3 +252,13 @@ builder. If the bundle encounters a value that could be interpreted as JSON, the
 If the value isn't JSON the value is interpreted as a string.
 If the example is supplied like ```example = "{\"key\": false}"``` the swagger definition will 
 contain the example as ```example: {"key": false}```. 
+
+### Generate swagger files
+
+The `SwaggerBundle` provides a `generate-swagger` command to generate the swagger description of the application.
+Dropwizard commands are executed similar to the `server` command that starts the web server.
+When using the gradle application plugin, start the swagger generation with:
+
+```sh
+path/to/your/application generate-swagger ./target/folder
+```

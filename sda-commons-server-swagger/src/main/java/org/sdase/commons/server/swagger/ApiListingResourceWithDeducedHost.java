@@ -15,18 +15,22 @@ import javax.ws.rs.core.UriInfo;
 public class ApiListingResourceWithDeducedHost extends ApiListingResource {
 
    @Override
-   protected Swagger process(Application app, ServletContext servletContext, ServletConfig sc, HttpHeaders headers,
+   public Swagger process(Application app, ServletContext servletContext, ServletConfig sc, HttpHeaders headers,
          UriInfo uriInfo) {
       Swagger swagger = super.process(app, servletContext, sc, headers, uriInfo);
       // Make sure to copy the swagger object to be thread safe (the object is cached internally)
       swagger = copySwagger(swagger);
-      swagger.setSchemes(Collections.singletonList(Scheme.forValue(uriInfo.getBaseUri().getScheme())));
 
-      // If the api is located at the default port (80 for http, 433 for https) getPort() == -1
-      if (uriInfo.getBaseUri().getPort() == -1) {
-         swagger.setHost(uriInfo.getBaseUri().getHost());
-      } else {
-         swagger.setHost(uriInfo.getBaseUri().getHost() + ":" + uriInfo.getBaseUri().getPort());
+      // uriInfo might be null if called by the SwaggerCommand
+      if (uriInfo != null) {
+         swagger.setSchemes(Collections.singletonList(Scheme.forValue(uriInfo.getBaseUri().getScheme())));
+
+         // If the api is located at the default port (80 for http, 433 for https) getPort() == -1
+         if (uriInfo.getBaseUri().getPort() == -1) {
+            swagger.setHost(uriInfo.getBaseUri().getHost());
+         } else {
+            swagger.setHost(uriInfo.getBaseUri().getHost() + ":" + uriInfo.getBaseUri().getPort());
+         }
       }
 
       return swagger;

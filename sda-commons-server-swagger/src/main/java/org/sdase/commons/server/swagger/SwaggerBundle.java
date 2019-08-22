@@ -18,6 +18,7 @@ import org.eclipse.jetty.servlets.CrossOriginFilter;
 import org.sdase.commons.optional.server.swagger.parameter.embed.EmbedParameterModifier;
 import org.sdase.commons.optional.server.swagger.json.example.JsonExampleModifier;
 import org.sdase.commons.optional.server.swagger.sort.SortingModifier;
+import org.sdase.commons.server.swagger.command.SwaggerCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +90,8 @@ public final class SwaggerBundle implements ConfiguredBundle<Configuration> {
    private final Info info;
    private final String resourcePackages;
 
+   protected ApiListingResourceWithDeducedHost swaggerResource;
+
    private BeanConfig beanConfig;
 
    private SwaggerBundle(Info info, String resourcePackages) {
@@ -102,7 +105,8 @@ public final class SwaggerBundle implements ConfiguredBundle<Configuration> {
 
    @Override
    public void initialize(Bootstrap<?> bootstrap) {
-      // no initialization needed
+      // add the swagger command
+      bootstrap.addCommand(new SwaggerCommand(this));
    }
 
    @Override
@@ -119,7 +123,10 @@ public final class SwaggerBundle implements ConfiguredBundle<Configuration> {
       beanConfig.getSwagger().getInfo().mergeWith(info);
       //
 
-      environment.jersey().register(new ApiListingResourceWithDeducedHost());
+      // store the swagger resource to be accessed by the SwaggerCommand
+      swaggerResource = new ApiListingResourceWithDeducedHost();
+
+      environment.jersey().register(swaggerResource);
       environment.jersey().register(new SwaggerSerializers());
 
       // Allow CORS to access (via wildcard) from Swagger UI/editor
@@ -161,6 +168,10 @@ public final class SwaggerBundle implements ConfiguredBundle<Configuration> {
       }
 
       return "/api";
+   }
+
+   public ApiListingResourceWithDeducedHost getSwaggerResource() {
+      return swaggerResource;
    }
 
    public interface InitialBuilder {

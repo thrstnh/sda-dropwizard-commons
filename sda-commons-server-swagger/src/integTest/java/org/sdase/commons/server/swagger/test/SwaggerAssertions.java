@@ -9,6 +9,7 @@ import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import com.github.fge.jsonschema.core.report.ProcessingReport;
 import com.github.fge.jsonschema.main.JsonSchemaFactory;
 import com.github.fge.jsonschema.main.JsonValidator;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
@@ -38,6 +39,21 @@ public final class SwaggerAssertions {
          fail("response cannot be converted to JSON", e);
       }
 
+      assertValidSwagger(swagger);
+   }
+
+   public static void assertValidSwagger2Json(File file) {
+      JsonNode swagger = null;
+      try {
+         swagger = JsonLoader.fromFile(file);
+      } catch (IOException e) {
+         fail("response cannot be converted to JSON", e);
+      }
+
+      assertValidSwagger(swagger);
+   }
+
+   private static void assertValidSwagger(JsonNode swagger) {
       try {
          ProcessingReport report = JsonValidatorHolder.jsonValidator
                .validate(SwaggerSchemaHolder.swagger2Schema, swagger);
@@ -81,8 +97,7 @@ public final class SwaggerAssertions {
             return JsonLoader.fromResource(SWAGGER_2_0_SCHEMA_JSON_LOCATION);
          } catch (IOException e) {
             throw new IllegalStateException(
-                  String.format(Locale.ROOT, "cannot load '%s'", SWAGGER_2_0_SCHEMA_JSON_LOCATION),
-                  e);
+                  String.format(Locale.ROOT, "cannot load '%s'", SWAGGER_2_0_SCHEMA_JSON_LOCATION), e);
          }
       }
    }

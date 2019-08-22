@@ -32,6 +32,8 @@ public class SwaggerBundleTestApp extends Application<Configuration> {
    private static final String JOHN_DOE_PATH = "/jdoe";
    private static final String HOUSE_PATH = "/house";
 
+   private SwaggerBundle swaggerBundle;
+
    @Context
    private UriInfo uriInfo;
 
@@ -41,11 +43,12 @@ public class SwaggerBundleTestApp extends Application<Configuration> {
 
    @Override
    public void initialize(Bootstrap<Configuration> bootstrap) {
-      bootstrap.addBundle(
-            SwaggerBundle.builder()
-                  .withTitle(getName())
-                  .addResourcePackageClass(getClass())
-                  .build());
+      swaggerBundle = SwaggerBundle.builder()
+            .withTitle(getName())
+            .addResourcePackageClass(getClass())
+            .build();
+
+      bootstrap.addBundle(swaggerBundle);
    }
 
    @Override
@@ -87,5 +90,9 @@ public class SwaggerBundleTestApp extends Application<Configuration> {
    public HouseResource getHouse() {
       URI self = uriInfo.getBaseUriBuilder().path(SwaggerBundleTestApp.class, "getHouse").build();
       return new HouseResource(Collections.emptyList(), Collections.emptyList(), new HALLink.Builder(self).build());
+   }
+
+   public SwaggerBundle getSwaggerBundle() {
+      return swaggerBundle;
    }
 }
