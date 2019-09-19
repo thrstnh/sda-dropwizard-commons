@@ -341,14 +341,15 @@ stopped or retried (handleError returns `false`). In case of retry the consumer 
 records. The next poll will retry the records on this partition starting with the failing record.  
 
 #### Dead Letter Handling MessageListenerStrategy
-This strategy reads messages from the broker and passes the records to a message handler that must be implemented by the user of the bundle. If the handler throws an exception, the consumed record is being taken to another queue and commited afterwards so that the processing of the next record can continue and the record with the error is not lost. Additional information is being added to the header of the message
+This strategy offers a way to retry the processing of failed records, without blocking the running process. To address the problem of blocked batches, we set up a distinct retry queue using a separately defined Kafka topic. Under this paradigm, when a consumer handler returns a failed response for a given message after a certain number of retries (can be configured by the user), the consumer publishes that message to its corresponding retry topic. The handler then returns true to the original consumer, which commits its offset.
+
+Consumer success is redefined from a successful handler response, meaning zero failure, to the establishment of a conclusive result for the consumed message, which is either the expected response or its placement elsewhere to be separately handled.
+
+Additional information is being added to the header of the message
 a) the exception
 b) the number of retries
-The idea is, that messages from the second queue can be re-inserted to the normal processing queue and the message handler can try to process it. If the message handler fails 5 times for the same message, the message will be inserted into a third queue where the cause of the failure can be analyzed.
 
-Info: The number of retries will not be reset by the strategy. 
-
-  
+Info: The number of retries will not be reset by the strategy. That means a message from the dead letter queue that will be re-inserted in the regular processing will still include have the header information ("retries": 5). If processing fails again, it will directly end in the dead letter queue again and not in the retry queue.  
 
 ## Create preconfigured consumers and producers
 To give the user more flexibility the bundle allows to create consumers and producers either by name of a valid configuration from the config yaml or 
