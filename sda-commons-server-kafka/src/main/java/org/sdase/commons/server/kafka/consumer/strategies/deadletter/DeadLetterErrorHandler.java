@@ -12,7 +12,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.sdase.commons.server.kafka.KeyValuePair;
 import org.sdase.commons.server.kafka.consumer.ErrorHandler;
 import org.sdase.commons.server.kafka.producer.MessageProducer;
 
@@ -34,7 +33,7 @@ public class DeadLetterErrorHandler<K, V> implements ErrorHandler<K, V> {
 
 		Headers headersList = new RecordHeaders();
 		headersList.add("Exception", serialize(e));
-		headersList.add(new KeyValuePair("Retries", serialize(numberOfRetries)));
+		headersList.add("Retries", serialize(numberOfRetries));
 
 		if (numberOfRetries < 5) {
 			retryProducer.send(serialize(record.key()), serialize(record.value()), headersList);
