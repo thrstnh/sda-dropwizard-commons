@@ -19,23 +19,24 @@ public class DeadLetterErrorHandler<K, V> implements ErrorHandler<K, V> {
 
 	private MessageProducer<byte[], byte[]> retryProducer;
 	private MessageProducer<byte[], byte[]> deadLetterTopicProducer;
+	private int maxNumberOfRetries;
 
 	public DeadLetterErrorHandler(MessageProducer<byte[], byte[]> retryProducer,
-			MessageProducer<byte[], byte[]> deadLetterTopicProducer) {
+			MessageProducer<byte[], byte[]> deadLetterTopicProducer, int maxNumberOfRetries) {
 		this.retryProducer = retryProducer;
 		this.deadLetterTopicProducer = deadLetterTopicProducer;
-
+		this.maxNumberOfRetries = maxNumberOfRetries;
 	}
 
 	@Override
 	public boolean handleError(ConsumerRecord<K, V> record, RuntimeException e, Consumer<K, V> consumer) {
-		int numberOfRetries = getRetryInformationFromRecord(record) + 1;
+		int executedNumberOfRetries = getRetryInformationFromRecord(record) + 1;
 
 		Headers headersList = new RecordHeaders();
 		headersList.add("Exception", serialize(e));
-		headersList.add("Retries", serialize(numberOfRetries));
+		headersList.add("Retries", serialize(executedNumberOfRetries));
 
-		if (numberOfRetries < 5) {
+		if (executedNumberOfRetries <= maxNumberOfRetries) {
 			retryProducer.send(serialize(record.key()), serialize(record.value()), headersList);
 		} else {
 			deadLetterTopicProducer.send(serialize(record.key()), serialize(record.value()), headersList);
