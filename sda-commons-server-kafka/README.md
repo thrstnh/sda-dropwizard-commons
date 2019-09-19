@@ -340,6 +340,16 @@ handler should throw `ProcessingErrorRetryException` which is then delegated to 
 stopped or retried (handleError returns `false`). In case of retry the consumer set the offset on the failing record and interrupt the processing of further 
 records. The next poll will retry the records on this partition starting with the failing record.  
 
+#### Dead Letter Handling MessageListenerStrategy
+This strategy reads messages from the broker and passes the records to a message handler that must be implemented by the user of the bundle. If the handler throws an exception, the consumed record is being taken to another queue and commited afterwards so that the processing of the next record can continue and the record with the error is not lost. Additional information is being added to the header of the message
+a) the exception
+b) the number of retries
+The idea is, that messages from the second queue can be re-inserted to the normal processing queue and the message handler can try to process it. If the message handler fails 5 times for the same message, the message will be inserted into a third queue where the cause of the failure can be analyzed.
+
+Info: The number of retries will not be reset by the strategy. 
+
+  
+
 ## Create preconfigured consumers and producers
 To give the user more flexibility the bundle allows to create consumers and producers either by name of a valid configuration from the config yaml or 
 by specifying a configuration in code. The user takes over the full responsibility and have to ensure that the consumer is closed when not 
