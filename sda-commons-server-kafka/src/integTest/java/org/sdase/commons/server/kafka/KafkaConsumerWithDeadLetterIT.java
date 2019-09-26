@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -37,6 +38,7 @@ import org.junit.rules.TestRule;
 import org.sdase.commons.server.kafka.builder.MessageListenerRegistration;
 import org.sdase.commons.server.kafka.config.ConsumerConfig;
 import org.sdase.commons.server.kafka.config.TopicConfig;
+import org.sdase.commons.server.kafka.consumer.ErrorHandler;
 import org.sdase.commons.server.kafka.consumer.MessageHandler;
 import org.sdase.commons.server.kafka.consumer.MessageListener;
 import org.sdase.commons.server.kafka.consumer.strategies.deadletter.DeadLetterMLS;
@@ -89,7 +91,10 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 	@Before
 	public void setup() throws InterruptedException {
 		results.clear();
-		Thread.sleep(5000);
+		// sleep needed, otherwise execution of multiple tests fail. Seems like in
+		// between some time
+		// for cleanup is needed.
+		Thread.sleep(1000);
 	}
 
 	@After
@@ -126,16 +131,20 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			}
 		};
 
-		KAFKA.getKafkaTestUtils().getTopicNames().forEach(t -> {
-			System.out.println("existing topic: " + t);
-		});
+		ErrorHandler<String, Integer> errorHandler = new ErrorHandler<String, Integer>() {
+			@Override
+			public boolean handleError(ConsumerRecord<String, Integer> record, RuntimeException e,
+					Consumer<String, Integer> consumer) {
+				throw new ProcessingErrorRetryException("seems that exception cannot be handled");
+			}
+		};
 
 		List<MessageListener> listener = bundle.createMessageListener(
 				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5)).build());
+						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -177,12 +186,20 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			}
 		};
 
+		ErrorHandler<String, Integer> errorHandler = new ErrorHandler<String, Integer>() {
+			@Override
+			public boolean handleError(ConsumerRecord<String, Integer> record, RuntimeException e,
+					Consumer<String, Integer> consumer) {
+				throw new ProcessingErrorRetryException("seems that exception cannot be handled");
+			}
+		};
+
 		List<MessageListener> listener = bundle.createMessageListener(
 				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5)).build());
+						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -229,12 +246,20 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			}
 		};
 
+		ErrorHandler<String, Integer> errorHandler = new ErrorHandler<String, Integer>() {
+			@Override
+			public boolean handleError(ConsumerRecord<String, Integer> record, RuntimeException e,
+					Consumer<String, Integer> consumer) {
+				throw new ProcessingErrorRetryException("seems that exception cannot be handled");
+			}
+		};
+
 		List<MessageListener> listener = bundle.createMessageListener(
 				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 2)).build());
+						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 2, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -295,12 +320,20 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			}
 		};
 
+		ErrorHandler<String, Integer> errorHandler = new ErrorHandler<String, Integer>() {
+			@Override
+			public boolean handleError(ConsumerRecord<String, Integer> record, RuntimeException e,
+					Consumer<String, Integer> consumer) {
+				throw new ProcessingErrorRetryException("seems that exception cannot be handled");
+			}
+		};
+
 		List<MessageListener> listener = bundle.createMessageListener(
 				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5)).build());
+						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -308,12 +341,123 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 		producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), 1));
 		producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), 2));
 		await().atMost(60, SECONDS).until(() -> testResults.size() == 1);
+
 		assertThat("there is 1 entry in dead letter topic",
 				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).size(), equalTo(1));
 
 		listener.forEach(l -> {
 			l.stopConsumer();
 		});
+	}
+
+	@Test(expected = IllegalStateException.class)
+	public void testErrorHandlerReturnsFalseStopsListemer() {
+		KAFKA.getKafkaTestUtils().createTopic(topic, 1, (short) 1);
+		KAFKA.getKafkaTestUtils().createTopic(retryTopic, 1, (short) 1);
+		KAFKA.getKafkaTestUtils().createTopic(deadLetterTopic, 1, (short) 1);
+
+		MessageHandler<String, Integer> handler = new MessageHandler<String, Integer>() {
+			@Override
+			public void handle(ConsumerRecord<String, Integer> record) {
+				throw new ProcessingErrorRetryException("processing error of record: " + record.key());
+			}
+		};
+
+		ErrorHandler<String, Integer> errorHandler = new ErrorHandler<String, Integer>() {
+			@Override
+			public boolean handleError(ConsumerRecord<String, Integer> record, RuntimeException e,
+					Consumer<String, Integer> consumer) {
+				return false;
+			}
+		};
+
+		List<MessageListener> listener = bundle.createMessageListener(
+				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
+						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
+								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
+						.withValueDeserializer(new IntegerDeserializer())
+						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+
+		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
+				IntegerSerializer.class);
+		producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), 1));
+
+		// wait some time before trying to access consumer again since otherwise
+		// problems for accessing the consumer from multiple threads at the same time
+		// occur
+		try {
+			Thread.sleep(5000);
+		} catch (InterruptedException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+
+		// consumer should be closed already, since the error handler returned false
+		listener.forEach(l -> {
+			l.getConsumer().poll(1000);
+		});
+	}
+
+	@Test
+	public void ErrorHandlerReturnsTrueAndNoDeadLetterHandlingWillBeInitiated() {
+
+		KAFKA.getKafkaTestUtils().createTopic(topic, 1, (short) 1);
+		KAFKA.getKafkaTestUtils().createTopic(retryTopic, 1, (short) 1);
+		KAFKA.getKafkaTestUtils().createTopic(deadLetterTopic, 1, (short) 1);
+
+		AtomicInteger processingError = new AtomicInteger(0);
+		List<Integer> testResults = Collections.synchronizedList(new ArrayList<Integer>());
+
+		MessageHandler<String, Integer> handler = new MessageHandler<String, Integer>() {
+			@Override
+			public void handle(ConsumerRecord<String, Integer> record) {
+
+				Integer value = record.value();
+				if (value == 2 || value == 10) {
+					processingError.incrementAndGet();
+					throw new ProcessingErrorRetryException("processing error of record: " + record.key());
+				}
+
+				testResults.add(value);
+			}
+		};
+
+		ErrorHandler<String, Integer> errorHandler = new ErrorHandler<String, Integer>() {
+			@Override
+			public boolean handleError(ConsumerRecord<String, Integer> record, RuntimeException e,
+					Consumer<String, Integer> consumer) {
+				return true;
+			}
+		};
+
+		List<MessageListener> listener = bundle.createMessageListener(
+				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
+						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
+								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
+						.withValueDeserializer(new IntegerDeserializer())
+						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+
+		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
+				IntegerSerializer.class);
+		IntStream.range(1, 21).forEach(
+				e -> producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), e)));
+
+		await().atMost(10, SECONDS).until(() -> testResults.size() == 18);
+		assertThat("There was at least 1 processing error", processingError.get(), greaterThanOrEqualTo(1));
+		assertThat("There must be 18 results finally processed by consumer (excep 2 and 10)", testResults.size(),
+				equalTo(18));
+
+		assertThat(testResults, containsInAnyOrder(1, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20));
+
+		KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(topic);
+		assertThat(
+				"There are no records in the dead letter topic (record 2 and 10 are lost in the test scenario, the error handler needs to take care of those records if he returns true",
+				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).size(), equalTo(0));
+
+		listener.forEach(l -> {
+			l.stopConsumer();
+		});
+
 	}
 
 	private static Object deserialize(byte[] obj) {

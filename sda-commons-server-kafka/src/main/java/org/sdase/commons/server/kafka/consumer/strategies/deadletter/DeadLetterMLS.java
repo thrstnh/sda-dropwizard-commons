@@ -1,15 +1,20 @@
 package org.sdase.commons.server.kafka.consumer.strategies.deadletter;
 
-import java.util.Collections;
-import java.util.List;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.Map;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.sdase.commons.server.kafka.KafkaBundle;
 import org.sdase.commons.server.kafka.builder.ProducerRegistration;
@@ -17,6 +22,7 @@ import org.sdase.commons.server.kafka.config.ProducerConfig;
 import org.sdase.commons.server.kafka.consumer.ErrorHandler;
 import org.sdase.commons.server.kafka.consumer.KafkaHelper;
 import org.sdase.commons.server.kafka.consumer.MessageHandler;
+import org.sdase.commons.server.kafka.consumer.StopListenerException;
 import org.sdase.commons.server.kafka.consumer.strategies.MessageListenerStrategy;
 import org.sdase.commons.server.kafka.exception.ConfigurationException;
 import org.sdase.commons.server.kafka.producer.MessageProducer;
@@ -41,6 +47,10 @@ public class DeadLetterMLS<K, V> extends MessageListenerStrategy<K, V> {
 	private static final String RETRY_TOPIC_CONFIG_POSTFIX = "retryTopic";
 	private static final String DEAD_LETTER_TOPIC_CONFIG_POSTFIX = "deadLetterTopic";
 
+	private MessageProducer<byte[], byte[]> retryProducer;
+	private MessageProducer<byte[], byte[]> deadLetterTopicProducer;
+	private int maxNumberOfRetries;
+
 	/**
 	 * Constructor for dead letter message listener strategy
 	 * 
@@ -54,7 +64,7 @@ public class DeadLetterMLS<K, V> extends MessageListenerStrategy<K, V> {
 	 * 
 	 */
 	public DeadLetterMLS(MessageHandler<K, V> handler, KafkaBundle<? extends Configuration> bundle,
-			String sourceTopicName, int maxNumberOfRetries) {
+			String sourceTopicName, int maxNumberOfRetries, ErrorHandler<K, V> errorHandler) {
 		this.handler = handler;
 
 		// Producer for retry
@@ -62,8 +72,7 @@ public class DeadLetterMLS<K, V> extends MessageListenerStrategy<K, V> {
 				bundle.getTopicConfiguration(sourceTopicName + RETRY_TOPIC_CONFIG_POSTFIX).getTopicName() + "-Producer")
 				.build();
 
-		MessageProducer<byte[], byte[]> retryProducer = bundle.registerProducer(ProducerRegistration
-				.<byte[], byte[]>builder()
+		this.retryProducer = bundle.registerProducer(ProducerRegistration.<byte[], byte[]>builder()
 				.forTopic(bundle.getTopicConfiguration(sourceTopicName + RETRY_TOPIC_CONFIG_POSTFIX))
 				.checkTopicConfiguration().withProducerConfig(retryProducerConfig)
 				.withKeySerializer(new ByteArraySerializer()).withValueSerializer(new ByteArraySerializer()).build());
@@ -74,13 +83,14 @@ public class DeadLetterMLS<K, V> extends MessageListenerStrategy<K, V> {
 						bundle.getTopicConfiguration(sourceTopicName + DEAD_LETTER_TOPIC_CONFIG_POSTFIX).getTopicName()
 								+ "-Producer")
 				.build();
-		MessageProducer<byte[], byte[]> deadLetterProducer = bundle.registerProducer(ProducerRegistration
-				.<byte[], byte[]>builder()
+		this.deadLetterTopicProducer = bundle.registerProducer(ProducerRegistration.<byte[], byte[]>builder()
 				.forTopic(bundle.getTopicConfiguration(sourceTopicName + DEAD_LETTER_TOPIC_CONFIG_POSTFIX))
 				.checkTopicConfiguration().withProducerConfig(deadProducerConfig)
 				.withKeySerializer(new ByteArraySerializer()).withValueSerializer(new ByteArraySerializer()).build());
 
-		errorHandler = new DeadLetterErrorHandler<K, V>(retryProducer, deadLetterProducer, maxNumberOfRetries);
+		this.maxNumberOfRetries = maxNumberOfRetries;
+
+		this.errorHandler = errorHandler;
 	}
 
 	@Override
@@ -89,13 +99,7 @@ public class DeadLetterMLS<K, V> extends MessageListenerStrategy<K, V> {
 			consumerName = KafkaHelper.getClientId(consumer);
 		}
 
-		records.forEach(r -> {
-			processRecord(r, consumer);
-		});
-
-//		for (TopicPartition partition : records.partitions()) {
-//			processRecordsByPartition(records, consumer, partition);
-//		}
+		records.forEach(r -> processRecord(r, consumer));
 	}
 
 	private void processRecord(ConsumerRecord<K, V> record, KafkaConsumer<K, V> consumer) {
@@ -114,45 +118,37 @@ public class DeadLetterMLS<K, V> extends MessageListenerStrategy<K, V> {
 				LOGGER.trace("calculated duration {} for message consumed by {} from {}", elapsedSeconds, consumerName,
 						record.topic());
 			}
-
+			consumer.commitSync();
 		} catch (RuntimeException e) {
-			LOGGER.error("Error while handling record {} in message handler {}", record.key(), handler.getClass(), e);
-			errorHandler.handleError(record, e, consumer);
-		}
-
-		consumer.commitSync();
-	}
-
-	private void processRecordsByPartition(ConsumerRecords<K, V> records, KafkaConsumer<K, V> consumer,
-			TopicPartition partition) {
-		List<ConsumerRecord<K, V>> partitionRecords = records.records(partition);
-		OffsetAndMetadata lastCommitOffset = null;
-		for (ConsumerRecord<K, V> record : partitionRecords) {
-			LOGGER.debug("Handling message for {}", record.key());
-
 			try {
-				SimpleTimer timer = new SimpleTimer();
-				handler.handle(record);
-				// mark last successful processed record for commit
-				lastCommitOffset = new OffsetAndMetadata(record.offset() + 1);
-
-				// Prometheus
-				double elapsedSeconds = timer.elapsedSeconds();
-				consumerProcessedMsgHistogram.observe(elapsedSeconds, consumerName, record.topic());
-
-				if (LOGGER.isTraceEnabled()) {
-					LOGGER.trace("calculated duration {} for message consumed by {} from {}", elapsedSeconds,
-							consumerName, record.topic());
+				boolean shouldContinue = errorHandler.handleError(record, e, consumer);
+				if (!shouldContinue) {
+					throw new StopListenerException(e);
+				} else {
+					consumer.commitSync();
+				}
+			} catch (Exception innerException) {
+				if (innerException instanceof StopListenerException) {
+					throw innerException;
 				}
 
-			} catch (RuntimeException e) {
-				LOGGER.error("Error while handling record {} in message handler {}", record.key(), handler.getClass(),
-						e);
-				boolean shouldContinue = errorHandler.handleError(record, e, consumer);
+				deadLetterHandling(record, innerException);
+				consumer.commitSync();
 			}
 		}
-		if (lastCommitOffset != null) {
-			consumer.commitSync(Collections.singletonMap(partition, lastCommitOffset));
+	}
+
+	private void deadLetterHandling(ConsumerRecord<K, V> record, Exception e) {
+		int executedNumberOfRetries = getRetryInformationFromRecord(record) + 1;
+
+		Headers headersList = new RecordHeaders();
+		headersList.add("Exception", serialize(e));
+		headersList.add("Retries", serialize(executedNumberOfRetries));
+
+		if (executedNumberOfRetries <= maxNumberOfRetries) {
+			retryProducer.send(serialize(record.key()), serialize(record.value()), headersList);
+		} else {
+			deadLetterTopicProducer.send(serialize(record.key()), serialize(record.value()), headersList);
 		}
 	}
 
@@ -170,6 +166,41 @@ public class DeadLetterMLS<K, V> extends MessageListenerStrategy<K, V> {
 		if (Boolean.valueOf(config.getOrDefault("enable.auto.commit", "false"))) {
 			throw new ConfigurationException(
 					"The strategy should not auto commit since the strategy does that manually. But property 'enable.auto.commit' in consumer config is set to 'true'");
+		}
+	}
+
+	private int getRetryInformationFromRecord(ConsumerRecord<K, V> record) {
+		for (Header pair : record.headers()) {
+			if (pair.key().equalsIgnoreCase("retries") && pair.value() != null) {
+				Object deserializedValue = deserialize(pair.value());
+				if (deserializedValue instanceof Integer)
+					return (int) deserializedValue;
+			}
+		}
+
+		return 0;
+	}
+
+	private static byte[] serialize(Object obj) {
+		try {
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			ObjectOutputStream os = new ObjectOutputStream(out);
+			os.writeObject(obj);
+			return out.toByteArray();
+		} catch (IOException e) {
+			LOGGER.error(e.getMessage());
+			return null;
+		}
+	}
+
+	private static Object deserialize(byte[] obj) {
+		try {
+			ByteArrayInputStream bis = new ByteArrayInputStream(obj);
+			ObjectInput in = new ObjectInputStream(bis);
+			return in.readObject();
+		} catch (IOException | ClassNotFoundException e) {
+			LOGGER.info(e.getMessage());
+			return null;
 		}
 	}
 

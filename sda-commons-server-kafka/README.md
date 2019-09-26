@@ -345,6 +345,13 @@ This strategy offers a way to retry the processing of failed records, without bl
 
 Consumer success is redefined from a successful handler response, meaning zero failure, to the establishment of a conclusive result for the consumed message, which is either the expected response or its placement elsewhere to be separately handled.
 
+This strategy reads messages from the broker and passes the records to a message handler that must be implemented by the user of the bundle. 
+
+The strategy requires `enable.auto.commit` set to `false` and the underlying consumer commits the records. In case of processing errors the handler should throw any `Exception` which is then delegated to the `ErrorHandler` where finally can be decided if 
+a). the processing should be stopped (handleError returns `false`). In case the handleError returns `false` the offset is not being commited and the listener will be stopped.
+b) the processing continues normally (handleError returns `true`) - e.g. the error could be fixed. 
+c) message will go into the dead letter handling mechanism
+
 Additional information is being added to the header of the message
 a) the exception
 b) the number of retries
