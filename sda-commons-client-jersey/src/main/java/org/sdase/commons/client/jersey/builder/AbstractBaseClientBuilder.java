@@ -2,6 +2,7 @@ package org.sdase.commons.client.jersey.builder;
 
 import io.dropwizard.client.JerseyClientBuilder;
 import org.glassfish.jersey.client.ClientProperties;
+import org.sdase.commons.client.jersey.ClientConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,21 +22,6 @@ abstract class AbstractBaseClientBuilder<T extends AbstractBaseClientBuilder> {
    private static final Logger LOG = LoggerFactory.getLogger(AbstractBaseClientBuilder.class);
 
    /**
-    * The default timeout to wait for data in an established connection. 2 seconds is used as a trade between "fail
-    * fast" and "better return late than no result". The timeout may be changed according to the use case considering
-    * how long a user is willing to wait and how long backend operations need.
-    */
-   private static final int DEFAULT_READ_TIMEOUT_MS = 2_000;
-
-   /**
-    * The default timeout to wait until a connection is established. 500ms should be suitable for all communication in
-    * the platform. Clients that request information from external services may extend this timeout if foreign services
-    * are usually slow.
-    */
-   private static final int DEFAULT_CONNECTION_TIMEOUT_MS = 500;
-
-
-   /**
     * As default, the client will follow redirects so that redirect status codes are automatically resolved by the client.
     */
    private static final boolean DEFAULT_FOLLOW_REDIRECTS = true;
@@ -50,11 +36,13 @@ abstract class AbstractBaseClientBuilder<T extends AbstractBaseClientBuilder> {
 
    private boolean followRedirects;
 
-   AbstractBaseClientBuilder(JerseyClientBuilder jerseyClientBuilder) {
+   AbstractBaseClientBuilder(
+         JerseyClientBuilder jerseyClientBuilder,
+         ClientConfiguration clientConfiguration) {
       this.jerseyClientBuilder = jerseyClientBuilder;
       this.filters = new ArrayList<>();
-      this.readTimeoutMillis = DEFAULT_READ_TIMEOUT_MS;
-      this.connectionTimeoutMillis = DEFAULT_CONNECTION_TIMEOUT_MS;
+      this.readTimeoutMillis = clientConfiguration.getReadTimeoutMs();
+      this.connectionTimeoutMillis = clientConfiguration.getConnectTimeoutMs();
       this.followRedirects = DEFAULT_FOLLOW_REDIRECTS;
    }
 
@@ -75,7 +63,7 @@ abstract class AbstractBaseClientBuilder<T extends AbstractBaseClientBuilder> {
     * <p>
     *    Sets the connection timeout for the clients that are built with this instance. The connection timeout is the
     *    amount of time to wait until the connection to the server is established. The default is
-    *    {@value #DEFAULT_CONNECTION_TIMEOUT_MS}ms.
+    *    {@value ClientConfiguration#DEFAULT_CONNECTION_TIMEOUT_MS}ms.
     * </p>
     * <p>
     *    If the connection timeout is overdue a {@link javax.ws.rs.ProcessingException} wrapping a
@@ -96,9 +84,9 @@ abstract class AbstractBaseClientBuilder<T extends AbstractBaseClientBuilder> {
     *    Sets the read timeout for the clients that are built with this instance. The read timeout is the timeout to
     *    wait for data in an established connection. Usually this timeout is violated when the client has sent the
     *    request and is waiting for the first byte of the response while the server is doing calculations, accessing a
-    *    database or delegating to other services. The default is {@value #DEFAULT_READ_TIMEOUT_MS}ms. The read timeout
-    *    should be set wisely according to the use case considering how long a user is willing to wait and how long
-    *    backend operations need.
+    *    database or delegating to other services. The default is
+    *    {@value ClientConfiguration#DEFAULT_READ_TIMEOUT_MS}ms. The read timeout should be set wisely
+    *    according to the use case considering how long a user is willing to wait and how long backend operations need.
     * </p>
     * <p>
     *    If the connection timeout is overdue a {@link javax.ws.rs.ProcessingException} wrapping a
@@ -122,6 +110,7 @@ abstract class AbstractBaseClientBuilder<T extends AbstractBaseClientBuilder> {
     */
    public T disableFollowRedirects() {
       this.followRedirects = false;
+      //noinspection unchecked
       return (T) this;
    }
 

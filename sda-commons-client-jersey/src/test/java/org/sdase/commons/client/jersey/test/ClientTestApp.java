@@ -14,6 +14,7 @@ public class ClientTestApp extends Application<ClientTestConfig> {
    private JerseyClientBundle<ClientTestConfig> jerseyClientBundle = JerseyClientBundle
          .builder()
          .withConsumerTokenProvider(ClientTestConfig::getConsumerToken)
+         .withConfigurationProvider(ClientTestConfig::getClient)
          .build();
 
    public static void main(String[] args) throws Exception {

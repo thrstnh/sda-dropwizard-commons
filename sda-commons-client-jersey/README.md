@@ -33,6 +33,37 @@ public class MyApplication extends Application<MyConfiguration> {
 }
 ```
 
+It is **strongly recommended** to make timeouts configurable in the target environment.
+The easiest way is to configure default timeouts, but it may be required to have configurable timeouts for each 
+individual client.
+
+To configure default timeouts, the `ClientConfiguration` is needed in your configuration class and the 
+`config.yaml` needs parameters for the timeouts: 
+
+```
+// MyConfig.java
+import io.dropwizard.Configuration;
+import org.sdase.commons.client.jersey.ClientConfiguration;
+
+public class MyConfig extends Configuration {
+   private ClientConfiguration client = new ClientConfiguration();
+  // ...
+}
+
+// config.yaml
+client:
+  connectTimeoutMs: ${CLIENT_DEFAULT_CONNECT_TIMEOUT_MS:-500}
+  readTimeoutMs: ${CLIENT_DEFAULT_READ_TIMEOUT_MS:-2000}
+
+// MyApplication.java
+public class MyApplication extends Application<MyConfig> {
+   private JerseyClientBundle jerseyClientBundle = JerseyClientBundle.builder()
+         .withConfigurationProvider(MyConfig::getClient)
+         .build();
+  // ...
+}
+```
+
 The `ClientFactory` is able to create Jersey clients from interfaces defining the API with JAX-RS annotations. It may 
 also create generic Jersey clients that can build the request definition with a fluent api:
 

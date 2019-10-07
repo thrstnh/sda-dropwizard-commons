@@ -13,10 +13,15 @@ public class ClientFactory {
 
    private final Environment environment;
    private final String consumerToken;
+   private final ClientConfiguration clientConfiguration;
 
-   ClientFactory(Environment environment, String consumerToken) {
+   ClientFactory(
+         Environment environment,
+         String consumerToken,
+         ClientConfiguration clientConfiguration) {
       this.environment = environment;
       this.consumerToken = consumerToken;
+      this.clientConfiguration = clientConfiguration;
    }
 
    /**
@@ -48,7 +53,10 @@ public class ClientFactory {
     * @return a builder to configure the client
     */
    public PlatformClientBuilder platformClient(HttpClientConfiguration httpClientConfiguration) {
-      return new PlatformClientBuilder(createClientBuilder(httpClientConfiguration), consumerToken);
+      return new PlatformClientBuilder(
+            createClientBuilder(httpClientConfiguration),
+            consumerToken,
+            clientConfiguration);
    }
 
    /**
@@ -92,7 +100,9 @@ public class ClientFactory {
     * @return a builder to configure the client
     */
    public ExternalClientBuilder externalClient(HttpClientConfiguration httpClientConfiguration) {
-      return new ExternalClientBuilder(createClientBuilder(httpClientConfiguration));
+      return new ExternalClientBuilder(
+            createClientBuilder(httpClientConfiguration),
+            this.clientConfiguration);
    }
 
    /**

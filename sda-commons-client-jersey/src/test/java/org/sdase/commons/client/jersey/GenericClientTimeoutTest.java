@@ -22,7 +22,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static io.dropwizard.testing.ResourceHelpers.resourceFilePath;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.entry;
 import static org.awaitility.Awaitility.await;
 import static org.sdase.commons.client.jersey.error.ClientErrorUtil.convertExceptions;
 import static org.sdase.commons.client.jersey.test.util.ClientRequestExceptionConditions.connectTimeoutError;
@@ -52,6 +54,20 @@ public class GenericClientTimeoutTest {
    public void resetRequests() {
       WIRE.resetRequests();
       app = dw.getApplication();
+   }
+
+
+   @Test
+   public void hasDefaultTimeouts() {
+      Client client = app.getJerseyClientBundle().getClientFactory()
+            .externalClient()
+            .buildGenericClient("test");
+
+      assertThat(client.getConfiguration().getProperties())
+            .contains(
+                  entry("jersey.config.client.connectTimeout", 500),
+                  entry("jersey.config.client.readTimeout", 2000)
+            );
    }
 
    @Test

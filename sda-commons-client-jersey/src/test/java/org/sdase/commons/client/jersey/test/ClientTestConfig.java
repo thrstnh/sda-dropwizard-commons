@@ -1,13 +1,25 @@
 package org.sdase.commons.client.jersey.test;
 
 import io.dropwizard.Configuration;
+import org.sdase.commons.client.jersey.ClientConfiguration;
 
 @SuppressWarnings("WeakerAccess")
 public class ClientTestConfig extends Configuration {
 
+   private ClientConfiguration client = new ClientConfiguration();
+
    private String consumerToken;
 
    private String mockBaseUrl;
+
+   public ClientConfiguration getClient() {
+      return client;
+   }
+
+   public ClientTestConfig setClient(ClientConfiguration client) {
+      this.client = client;
+      return this;
+   }
 
    public String getConsumerToken() {
       return consumerToken;
