@@ -14,6 +14,8 @@ import org.sdase.commons.server.kafka.consumer.strategies.MessageListenerStrateg
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.sql.rowset.serial.SerialException;
+
 /**
  * <p>
  * A MessageListener implements a default polling loop for retrieving messages
@@ -96,8 +98,14 @@ public class MessageListener<K, V> implements Runnable {
          } catch (StopListenerException e) {
             LOGGER.error("Stopping listener for topics [{}] due to exception", joinedTopics, e);
             break;
-         } catch (RuntimeException re) {
+         }
+         catch (SerialException se) {
+            strategy.handleInfiniteLoop(re, consumer);
+         }
+         catch (RuntimeException re) {
+            }
             LOGGER.error("Unauthorized or other runtime exception.", re);
+
          }
       }
       LOGGER.info("MessageListener closing Consumer for [{}]", joinedTopics);

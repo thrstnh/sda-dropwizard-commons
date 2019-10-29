@@ -2,6 +2,8 @@ package org.sdase.commons.server.kafka.consumer.strategies;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.logging.Logger;
+
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.sdase.commons.server.kafka.config.ConsumerConfig;
@@ -26,7 +28,7 @@ import org.sdase.commons.server.kafka.prometheus.ConsumerTopicMessageHistogram;
  *           value object type
  */
 public abstract class MessageListenerStrategy<K, V> {
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(MessageListenerStrategy.class);
    protected ConsumerTopicMessageHistogram consumerProcessedMsgHistogram;
 
    public void init(ConsumerTopicMessageHistogram consumerTopicMessageHistogram) {
@@ -74,5 +76,10 @@ public abstract class MessageListenerStrategy<K, V> {
     */
    public Map<String, String> forcedConfigToApply() {
       return Collections.emptyMap();
+   }
+
+   public void handleInfiniteLoop(RuntimeException e, KafkaConsumer<K, V> consumer){
+       LOGGER.info("serialization exception occured: " + e.getMessage());
+       consumer.commitSync();
    }
 }
