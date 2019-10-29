@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.sdase.commons.server.kafka.config.ListenerConfig;
 
@@ -99,13 +100,11 @@ public class MessageListener<K, V> implements Runnable {
             LOGGER.error("Stopping listener for topics [{}] due to exception", joinedTopics, e);
             break;
          }
-         catch (SerialException se) {
-            strategy.handleInfiniteLoop(re, consumer);
+         catch (SerializationException se) {
+            strategy.handleInfiniteLoop(se, consumer);
          }
          catch (RuntimeException re) {
-            }
             LOGGER.error("Unauthorized or other runtime exception.", re);
-
          }
       }
       LOGGER.info("MessageListener closing Consumer for [{}]", joinedTopics);
