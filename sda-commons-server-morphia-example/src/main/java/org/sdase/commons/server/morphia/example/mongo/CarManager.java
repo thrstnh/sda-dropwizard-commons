@@ -15,7 +15,12 @@ import java.util.List;
 @ApplicationScoped
 public class CarManager {
 
-   private final Datastore datastore;
+   private Datastore datastore;
+
+   @SuppressWarnings("unused")
+   CarManager() {
+      // for CDI
+   }
 
    @Inject
    public CarManager(Datastore datastore) {
