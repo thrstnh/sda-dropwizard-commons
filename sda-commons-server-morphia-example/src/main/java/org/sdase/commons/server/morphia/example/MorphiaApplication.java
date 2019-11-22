@@ -6,6 +6,7 @@ import io.dropwizard.setup.Environment;
 import org.sdase.commons.server.morphia.MorphiaBundle;
 import org.sdase.commons.server.morphia.example.mongo.CarManager;
 import org.sdase.commons.server.morphia.example.mongo.model.Car;
+import org.sdase.commons.server.prometheus.PrometheusBundle;
 import org.sdase.commons.server.weld.DropwizardWeldHelper;
 import dev.morphia.Datastore;
 
@@ -31,6 +32,7 @@ public class MorphiaApplication extends Application<MorphiaApplicationConfigurat
    @Override
    public void initialize(Bootstrap<MorphiaApplicationConfiguration> bootstrap) {
       bootstrap.addBundle(morphiaBundle); // Add bundle to Dropwizard
+      bootstrap.addBundle(PrometheusBundle.builder().build());
    }
 
    @Override

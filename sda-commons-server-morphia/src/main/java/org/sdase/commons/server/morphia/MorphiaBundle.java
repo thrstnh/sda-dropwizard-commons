@@ -2,7 +2,12 @@ package org.sdase.commons.server.morphia;
 
 import com.codahale.metrics.health.HealthCheckRegistry;
 import com.mongodb.MongoClient;
+import dev.morphia.Datastore;
+import dev.morphia.Morphia;
 import dev.morphia.ValidationExtension;
+import dev.morphia.converters.LocalDateConverter;
+import dev.morphia.converters.LocalDateTimeConverter;
+import dev.morphia.converters.TypeConverter;
 import io.dropwizard.Configuration;
 import io.dropwizard.ConfiguredBundle;
 import io.dropwizard.setup.Bootstrap;
@@ -11,11 +16,7 @@ import org.apache.commons.lang3.Validate;
 import org.sdase.commons.server.morphia.converter.ZonedDateTimeConverter;
 import org.sdase.commons.server.morphia.health.MongoHealthCheck;
 import org.sdase.commons.server.morphia.internal.MongoClientBuilder;
-import dev.morphia.Datastore;
-import dev.morphia.Morphia;
-import dev.morphia.converters.LocalDateConverter;
-import dev.morphia.converters.LocalDateTimeConverter;
-import dev.morphia.converters.TypeConverter;
+import org.sdase.commons.server.morphia.metrics.MongoDbMetricsInitializer;
 
 import javax.validation.constraints.NotNull;
 import java.util.HashSet;
@@ -100,6 +101,11 @@ public class MorphiaBundle<C extends Configuration> implements ConfiguredBundle<
       }
 
       registerHealthCheck(environment.healthChecks(), mongoConfiguration.getDatabase());
+      registerMetrics(environment, mongoConfiguration);
+   }
+
+   private void registerMetrics(Environment environment, MongoConfiguration mongoConfiguration) {
+      environment.lifecycle().manage(new MongoDbMetricsInitializer(mongoClient, mongoConfiguration.getDatabase()));
    }
 
    /**

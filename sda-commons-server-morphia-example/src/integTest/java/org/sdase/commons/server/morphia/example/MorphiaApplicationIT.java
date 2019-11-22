@@ -1,6 +1,7 @@
 package org.sdase.commons.server.morphia.example;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import dev.morphia.Datastore;
 import org.bson.Document;
@@ -14,6 +15,8 @@ import org.sdase.commons.server.morphia.example.mongo.model.Car;
 import org.sdase.commons.server.testing.DropwizardConfigurationHelper;
 import org.sdase.commons.server.testing.LazyRule;
 import org.sdase.commons.server.weld.testing.WeldAppRule;
+
+import java.util.concurrent.TimeUnit;
 
 public class MorphiaApplicationIT {
 
@@ -65,6 +68,33 @@ public class MorphiaApplicationIT {
       assertThat(indexInfo).extracting(dbo -> dbo.get("name")).containsExactlyInAnyOrder("_id_", "sign_1");
 
    }
+
+   @Test
+   public void shouldRegisterSizeMetrics() {
+      await().atMost(10L, TimeUnit.SECONDS).untilAsserted(() -> {
+         String metricsResult = LAZY_RULE.getRule().client().target("http://localhost:" + LAZY_RULE.getRule().getAdminPort())
+               .path("/metrics/prometheus")
+               .request("text/plain")
+               .get(String.class);
+         assertThat(metricsResult)
+               .contains("mongodb_data_filesystem_size_bytes")
+         ;
+      });
+   }
+
+   @Test
+   public void shouldRegisterUsedMetrics() {
+      await().atMost(10L, TimeUnit.SECONDS).untilAsserted(() -> {
+         String metricsResult = LAZY_RULE.getRule().client().target("http://localhost:" + LAZY_RULE.getRule().getAdminPort())
+               .path("/metrics/prometheus")
+               .request("text/plain")
+               .get(String.class);
+         assertThat(metricsResult)
+               .contains("mongodb_data_filesystem_used_bytes")
+         ;
+      });
+   }
+
 
    private void addData() {
       carManager.store(HH);

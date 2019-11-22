@@ -3,10 +3,13 @@ dependencies {
     
     compile 'dev.morphia.morphia:core'
     compile 'dev.morphia.morphia:validation'
+    compile 'io.prometheus:simpleclient'
 
     compile 'org.bouncycastle:bcpkix-jdk15on'
 
     testCompile project(':sda-commons-server-mongo-testing')
+    testCompile project(':sda-commons-server-prometheus')
     testCompile 'commons-io:commons-io:2.6'
     testCompile 'org.assertj:assertj-core'
+    testCompile 'org.awaitility:awaitility'
 }

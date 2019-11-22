@@ -1,8 +1,10 @@
 dependencies {
     compile project(':sda-commons-server-morphia')
     compile project(':sda-commons-server-weld')
+    compile project(':sda-commons-server-prometheus')
 
     testCompile project(':sda-commons-server-mongo-testing')
     testCompile project(':sda-commons-server-weld-testing')
+    testCompile 'org.awaitility:awaitility'
 
 }
