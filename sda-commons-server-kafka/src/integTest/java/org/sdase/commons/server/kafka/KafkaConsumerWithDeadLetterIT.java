@@ -95,7 +95,7 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 		// sleep needed, otherwise execution of multiple tests fail. Seems like in
 		// between some time
 		// for cleanup is needed.
-		Thread.sleep(1000);
+		Thread.sleep(1000); //NOSONAR
 	}
 
 	@After
@@ -330,7 +330,7 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 		// problems for accessing the consumer from multiple threads at the same time
 		// occur
 		try {
-			Thread.sleep(10000);
+			Thread.sleep(10000); //NOSONAR
 		} catch (InterruptedException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();

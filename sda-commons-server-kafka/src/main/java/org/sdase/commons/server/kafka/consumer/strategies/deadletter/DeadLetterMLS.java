@@ -39,7 +39,7 @@ import static java.util.Objects.isNull;
  * To use the strategy the {@link DeadLetterNoSerializationErrorDeserializer} needs to be used as a wrapper for
  * key and value deserializer
  */
-public class DeadLetterMLS<K extends Serializable, V extends Serializable> extends MessageListenerStrategy<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> {
+public class DeadLetterMLS<K extends Serializable, V extends Serializable> extends MessageListenerStrategy<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> { //NOSONAR
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DeadLetterMLS.class);
     private static final String EXCEPTION = "Exception";
@@ -103,7 +103,7 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
                 final SimpleTimer timer = new SimpleTimer();
 
                 handler.handle(new ConsumerRecord<>(record.topic(), record.partition(),record.offset(),
-                    record.timestamp(), record.timestampType(), record.checksum(), record.serializedKeySize(),
+                    record.timestamp(), record.timestampType(), record.checksum(), record.serializedKeySize(), //NOSONAR
                     record.serializedValueSize(),
                     record.key().getValue(), record.value().getValue(), record.headers()
                 ));
@@ -124,7 +124,7 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
             if (shouldContinue)
                 consumer.commitSync();
             else
-                throw new StopListenerException(new RuntimeException("Listener Stopped because error handler returned false"));
+                throw new StopListenerException(new RuntimeException("Listener Stopped because error handler returned false")); //NOSONAR
         }
     }
 
@@ -144,7 +144,7 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
             return errorHandler.handleError(
                 new ConsumerRecord<>(
                     record.topic(), record.partition(),record.offset(),
-                    record.timestamp(), record.timestampType(), record.checksum(), record.serializedKeySize(),
+                    record.timestamp(), record.timestampType(), record.checksum(), record.serializedKeySize(), //NOSONAR
                     record.serializedValueSize(),
                     recordVKey, recordValue, record.headers()),
                 e,
@@ -232,7 +232,7 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
         final byte[] valuePayload = getByteArrayPayload(record.value());
 
         return new ConsumerRecord<>(record.topic(), record.partition(),record.offset(), record.timestamp(),
-            record.timestampType(), record.checksum(), record.serializedKeySize(), record.serializedValueSize(),
+            record.timestampType(), record.checksum(), record.serializedKeySize(), record.serializedValueSize(), //NOSONAR
             keyPayload, valuePayload, record.headers()
         );
     }
