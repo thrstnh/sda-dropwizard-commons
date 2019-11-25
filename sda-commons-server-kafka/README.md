@@ -341,22 +341,29 @@ stopped or retried (handleError returns `false`). In case of retry the consumer 
 records. The next poll will retry the records on this partition starting with the failing record.  
 
 #### Dead Letter Handling MessageListenerStrategy
-This strategy offers a way to retry the processing of failed records, without blocking the running process. To address the problem of blocked batches, we set up a distinct retry queue using a separately defined Kafka topic. Under this paradigm, when a consumer handler returns a failed response for a given message after a certain number of retries (can be configured by the user), the consumer publishes that message to its corresponding retry topic. The handler then returns true to the original consumer, which commits its offset.
+This strategy offers a way to retry the processing of failed records, without blocking the running process. To address the problem of blocked batches, we set
+up a distinct retry queue using a separately defined Kafka topic. Under this paradigm, when a deserialization exception occurs or the error handler throws an exception,
+the message will be published to a retry queue. From the retry queue an automated mechanism publishes messages again back in the normal processing queue of the application
+with additional information in the header of the message that counts how often a message has been processed in the retry queue. After a certain number of retries
+(can be configured by the user), the consumer publishes that message to a dead letter topic. From the dead letter topic a process needs to be manually triggered
+to put messages from the dead letter queue back to the normal processing queue by a developer. This is implemented via an admin Task.
 
-Consumer success is redefined from a successful handler response, meaning zero failure, to the establishment of a conclusive result for the consumed message, which is either the expected response or its placement elsewhere to be separately handled.
+Consumer success is redefined from a successful handler response, meaning zero failure, to the establishment of a conclusive result for the consumed message,
+which is either the expected response or its placement elsewhere to be separately handled.
 
-This strategy reads messages from the broker and passes the records to a message handler that must be implemented by the user of the bundle. 
+This strategy reads messages from the broker and passes the records to a message handler that must be implemented by the user of the bundle.
 
-The strategy requires `enable.auto.commit` set to `false` and the underlying consumer commits the records. In case of processing errors the handler should throw any `Exception` which is then delegated to the `ErrorHandler` where finally can be decided if 
+The strategy requires `enable.auto.commit` set to `false` and the underlying consumer commits the records. In case of processing errors the handler should
+throw any `Exception` which is then delegated to the `ErrorHandler` where finally can be decided if
 a). the processing should be stopped (handleError returns `false`). In case the handleError returns `false` the offset is not being commited and the listener will be stopped.
-b) the processing continues normally (handleError returns `true`) - e.g. the error could be fixed. 
+b) the processing continues normally (handleError returns `true`) - e.g. the error could be fixed.
 c) message will go into the dead letter handling mechanism
 
 Additional information is being added to the header of the message
 a) the exception
 b) the number of retries
 
-Info: The number of retries will not be reset by the strategy. That means a message from the dead letter queue that will be re-inserted in the regular processing will still include have the header information ("retries": 5). If processing fails again, it will directly end in the dead letter queue again and not in the retry queue.  
+Info: The number of retries will not be reset by the strategy. That means a message from the dead letter queue that will be re-inserted in the regular processing will still include have the header information ("retries": 5). If processing fails again, it will directly end in the dead letter queue again and not in the retry queue.
 
 ## Create preconfigured consumers and producers
 To give the user more flexibility the bundle allows to create consumers and producers either by name of a valid configuration from the config yaml or 
