@@ -25,10 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -42,6 +39,7 @@ import org.sdase.commons.server.kafka.consumer.ErrorHandler;
 import org.sdase.commons.server.kafka.consumer.MessageHandler;
 import org.sdase.commons.server.kafka.consumer.MessageListener;
 import org.sdase.commons.server.kafka.consumer.strategies.deadletter.DeadLetterMLS;
+import org.sdase.commons.server.kafka.consumer.strategies.deadletter.DeadLetterNoSerializationErrorDeserializer;
 import org.sdase.commons.server.kafka.consumer.strategies.retryprocessingerror.ProcessingErrorRetryException;
 import org.sdase.commons.server.kafka.dropwizard.KafkaTestApplication;
 import org.sdase.commons.server.kafka.dropwizard.KafkaTestConfiguration;
@@ -60,8 +58,8 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			.withBrokerProperty("auto.create.topics.enable", "false");
 
 	static String topic = "processinErrorsShouldBeForwardedtoDeadLetterTopic";
-	static String retryTopic = "retryTopic";
-	static String deadLetterTopic = "deadLetterTopic";
+	static String retryTopic = "processinErrorsShouldBeForwardedtoDeadLetterTopic.retry";
+	static String deadLetterTopic = "processinErrorsShouldBeForwardedtoDeadLetterTopic.deadletter";
 
 	private static final LazyRule<DropwizardAppRule<KafkaTestConfiguration>> DROPWIZARD_APP_RULE = new LazyRule<DropwizardAppRule<KafkaTestConfiguration>>(
 			() -> {
@@ -109,7 +107,7 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 
 		KAFKA.getKafkaTestUtils().getAdminClient().deleteTopics(topicsList);
 	}
-/*
+
 	@Test
 	public void DeadLetterShouldBeSentToDeadLetterTopic() {
 
@@ -142,36 +140,41 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			}
 		};
 
+
+		Deserializer keyDeserializer = new StringDeserializer();
+		Deserializer valueDeserializer = new IntegerDeserializer();
+
 		List<MessageListener> listener = bundle.createMessageListener(
 				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
-						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, topic, topic, 5, 1000, errorHandler)).build());
+						.withValueDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(valueDeserializer))
+						.withKeyDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(keyDeserializer))
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, topic, topic, 4, 1000, errorHandler)).build());
 
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
-		IntStream.range(1, 21).forEach(
+		IntStream.range(1, 4).forEach(
 				e -> producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), e)));
 		System.out.println("test");
-		await().atMost(10, SECONDS).until(() -> testResults.size() == 18);
+		await().atMost(20, SECONDS).until(() -> testResults.size() == 2);
 		assertThat("There was at least 1 processing error", processingError.get(), greaterThanOrEqualTo(1));
-		assertThat("There must be 18 results finally processed by consumer (excep 2 and 10)", testResults.size(),
-				equalTo(18));
+		assertThat("There must be 18 results finally processed by consumer (except 2 and 10)", testResults.size(),
+				equalTo(2));
 
-		assertThat(testResults, containsInAnyOrder(1, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20));
+		assertThat(testResults, containsInAnyOrder(1, 3));
 
 		KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(topic);
 		assertThat("There are two records in the dead letter topic",
-				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).size(), equalTo(2));
+				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).size(), equalTo(4));
 
 		listener.forEach(l -> {
 			l.stopConsumer();
 		});
 
 	}
-
+	/*
 	@Test
 	public void DeadLetterMessagesShouldContainHeaders() {
 		KAFKA.getKafkaTestUtils().createTopic(topic, 1, (short) 1);
@@ -468,7 +471,7 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 		});
 
 	}
-
+*/
 	private static Object deserialize(byte[] obj) {
 		try {
 			ByteArrayInputStream bis = new ByteArrayInputStream(obj);
@@ -483,4 +486,3 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 		}
 	}
 }
-*/
