@@ -157,7 +157,6 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 				IntegerSerializer.class);
 		IntStream.range(1, 4).forEach(
 				e -> producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), e)));
-		System.out.println("test");
 		await().atMost(20, SECONDS).until(() -> testResults.size() == 2);
 		assertThat("There was at least 1 processing error", processingError.get(), greaterThanOrEqualTo(1));
 		assertThat("There must be 18 results finally processed by consumer (except 2 and 10)", testResults.size(),
@@ -166,15 +165,18 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 		assertThat(testResults, containsInAnyOrder(1, 3));
 
 		KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(topic);
-		assertThat("There are two records in the dead letter topic",
+		assertThat("There are records in the retry topic",
 				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).size(), equalTo(4));
+
+		assertThat("There are two records in the retry topic",
+				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(deadLetterTopic).size(), equalTo(1));
 
 		listener.forEach(l -> {
 			l.stopConsumer();
 		});
 
 	}
-	/*
+
 	@Test
 	public void DeadLetterMessagesShouldContainHeaders() {
 		KAFKA.getKafkaTestUtils().createTopic(topic, 1, (short) 1);
@@ -201,113 +203,38 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			}
 		};
 
+		Deserializer keyDeserializer = new StringDeserializer();
+		Deserializer valueDeserializer = new IntegerDeserializer();
+
 		List<MessageListener> listener = bundle.createMessageListener(
 				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
-						.withValueDeserializer(new IntegerDeserializer())
-						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
-						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, topic, topic, 5, 1000, errorHandler)).build());
+						.withValueDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(valueDeserializer))
+						.withKeyDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(keyDeserializer))
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, topic, topic, 4, 1000, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
 		producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), 1));
 		producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), 2));
 
-		await().atMost(10, SECONDS).until(() -> testResults.size() == 1);
+		await().atMost(15, SECONDS).until(() -> testResults.size() == 1);
 
 		Header[] consumeAllRecordsFromTopic = KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).get(0)
 				.headers().toArray();
 		KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(topic);
 
-		assertThat("The Header of the Failes messages contains Key Exception", consumeAllRecordsFromTopic[0].key(),
+		assertThat("The Header of the failed messages contains Key Exception", consumeAllRecordsFromTopic[0].key(),
 				equalTo("Exception"));
-		assertThat("The Header of the Failes messages contains Value object Exception",
+		assertThat("The Header of the failed messages contains Value object Exception",
 				deserialize(consumeAllRecordsFromTopic[0].value()).getClass().getName(),
 				equalTo("org.sdase.commons.server.kafka.consumer.strategies.retryprocessingerror.ProcessingErrorRetryException"));
-		assertThat("The Header of the Failes messages contains Key Retries", consumeAllRecordsFromTopic[1].key(),
+		assertThat("The Header of the failed messages contains Key Retries", consumeAllRecordsFromTopic[1].key(),
 				equalTo("Retries"));
 
-		assertThat("The Header of the Failes messages contains Value number of Retries",
+		assertThat("The Header of the failed messages contains Value number of Retries",
 				deserialize(consumeAllRecordsFromTopic[1].value()), equalTo(1));
-
-		listener.forEach(l -> {
-			l.stopConsumer();
-		});
-	}
-
-	@Test
-	public void AfterFiveRetriesTheMessageWillBeInADeadTopic() {
-		KAFKA.getKafkaTestUtils().createTopic(topic, 1, (short) 1);
-		KAFKA.getKafkaTestUtils().createTopic(retryTopic, 1, (short) 1);
-		KAFKA.getKafkaTestUtils().createTopic(deadLetterTopic, 1, (short) 1);
-
-		List<Integer> testResults = Collections.synchronizedList(new ArrayList<Integer>());
-
-		MessageHandler<String, Integer> handler = new MessageHandler<String, Integer>() {
-			@Override
-			public void handle(ConsumerRecord<String, Integer> record) {
-				if (record.value() == 1) {
-					throw new ProcessingErrorRetryException("processing error of record: " + record.key());
-				}
-				testResults.add(record.value());
-			}
-		};
-
-		ErrorHandler<String, Integer> errorHandler = new ErrorHandler<String, Integer>() {
-			@Override
-			public boolean handleError(ConsumerRecord<String, Integer> record, RuntimeException e,
-					Consumer<String, Integer> consumer) {
-				throw new ProcessingErrorRetryException("seems that exception cannot be handled");
-			}
-		};
-
-		List<MessageListener> listener = bundle.createMessageListener(
-				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
-						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
-								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
-						.withValueDeserializer(new IntegerDeserializer())
-						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 2, errorHandler)).build());
-						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, "test", "test", 5, 1000, errorHandler)).build());
-
-		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
-				IntegerSerializer.class);
-
-		// first round
-		producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), 1));
-		producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), 2));
-		await().atMost(60, SECONDS).until(() -> testResults.size() == 1);
-		assertThat("there is 1 entry in dead letter topic",
-				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).size(), equalTo(1));
-		assertThat("there is 1 entry in normal topic", testResults.size(), equalTo(1));
-		assertThat("Dead topic is empty at the beginning",
-				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(deadLetterTopic).size(), equalTo(0));
-
-		// second round
-		ConsumerRecord<byte[], byte[]> consumerRecord = KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic)
-				.get(0);
-		producer.send(new ProducerRecord<String, Integer>(topic, null, (String) deserialize(consumerRecord.key()),
-				(int) deserialize(consumerRecord.value()), consumerRecord.headers()));
-		producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), 2));
-		await().atMost(60, SECONDS).until(() -> testResults.size() == 2);
-		assertThat("there is 2 entries in dead letter topic",
-				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).size(), equalTo(2));
-		assertThat("there is 2 entries in normal topic", testResults.size(), equalTo(2));
-		assertThat("Dead topic is empty at the beginning",
-				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(deadLetterTopic).size(), equalTo(0));
-
-		// Third round
-		consumerRecord = KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).get(1);
-		producer.send(new ProducerRecord<String, Integer>(topic, null, (String) deserialize(consumerRecord.key()),
-				(int) deserialize(consumerRecord.value()), consumerRecord.headers()));
-		producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), 2));
-		await().atMost(60, SECONDS).until(() -> testResults.size() == 3);
-
-		assertThat("there are still 2 entries in retry topic",
-				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(retryTopic).size(), equalTo(2));
-		assertThat("there is 3 entries in normal topic", testResults.size(), equalTo(3));
-		assertThat("The dead letter topic contains 1 message",
-				KAFKA.getKafkaTestUtils().consumeAllRecordsFromTopic(deadLetterTopic).size(), equalTo(1));
 
 		listener.forEach(l -> {
 			l.stopConsumer();
@@ -337,13 +264,16 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			}
 		};
 
+		Deserializer keyDeserializer = new StringDeserializer();
+		Deserializer valueDeserializer = new IntegerDeserializer();
+
 		List<MessageListener> listener = bundle.createMessageListener(
 				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
-						.withValueDeserializer(new IntegerDeserializer())
-						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
-						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, "test", "test", 5, 1000, errorHandler)).build());
+						.withValueDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(valueDeserializer))
+						.withKeyDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(keyDeserializer))
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, topic, topic, 4, 1000, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -361,7 +291,7 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 	}
 
 	@Test(expected = IllegalStateException.class)
-	public void testErrorHandlerReturnsFalseStopsListemer() {
+	public void testErrorHandlerReturnsFalseStopsListener() {
 		KAFKA.getKafkaTestUtils().createTopic(topic, 1, (short) 1);
 		KAFKA.getKafkaTestUtils().createTopic(retryTopic, 1, (short) 1);
 		KAFKA.getKafkaTestUtils().createTopic(deadLetterTopic, 1, (short) 1);
@@ -381,13 +311,16 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			}
 		};
 
+		Deserializer keyDeserializer = new StringDeserializer();
+		Deserializer valueDeserializer = new IntegerDeserializer();
+
 		List<MessageListener> listener = bundle.createMessageListener(
 				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
-						.withValueDeserializer(new IntegerDeserializer())
-						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
-						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, "test", "test", 5, 1000, errorHandler)).build());
+						.withValueDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(valueDeserializer))
+						.withKeyDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(keyDeserializer))
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, topic, topic, 4, 1000, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -397,7 +330,7 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 		// problems for accessing the consumer from multiple threads at the same time
 		// occur
 		try {
-			Thread.sleep(5000);
+			Thread.sleep(10000);
 		} catch (InterruptedException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
@@ -441,13 +374,16 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 			}
 		};
 
+		Deserializer keyDeserializer = new StringDeserializer();
+		Deserializer valueDeserializer = new IntegerDeserializer();
+
 		List<MessageListener> listener = bundle.createMessageListener(
 				MessageListenerRegistration.<String, Integer>builder().withDefaultListenerConfig().forTopic(topic)
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
-						.withValueDeserializer(new IntegerDeserializer())
-						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
-						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, "test", "test", 5, 1000, errorHandler)).build());
+						.withValueDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(valueDeserializer))
+						.withKeyDeserializer(new DeadLetterNoSerializationErrorDeserializer<>(keyDeserializer))
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, topic, topic, 4, 1000, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -471,7 +407,7 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 		});
 
 	}
-*/
+
 	private static Object deserialize(byte[] obj) {
 		try {
 			ByteArrayInputStream bis = new ByteArrayInputStream(obj);

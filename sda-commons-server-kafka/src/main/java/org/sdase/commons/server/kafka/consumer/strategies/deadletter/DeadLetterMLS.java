@@ -15,6 +15,7 @@ import org.sdase.commons.server.kafka.KafkaBundle;
 import org.sdase.commons.server.kafka.consumer.ErrorHandler;
 import org.sdase.commons.server.kafka.consumer.KafkaHelper;
 import org.sdase.commons.server.kafka.consumer.MessageHandler;
+import org.sdase.commons.server.kafka.consumer.StopListenerException;
 import org.sdase.commons.server.kafka.consumer.strategies.MessageListenerStrategy;
 import org.sdase.commons.server.kafka.exception.ConfigurationException;
 import org.sdase.commons.server.kafka.producer.MessageProducer;
@@ -119,6 +120,8 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
         } finally {
             if (shouldContinue)
                 consumer.commitSync();
+            else
+                throw new StopListenerException(new RuntimeException("Listener Stopped because error handler returned false"));
         }
     }
 
