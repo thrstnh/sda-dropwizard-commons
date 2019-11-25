@@ -359,6 +359,8 @@ a). the processing should be stopped (handleError returns `false`). In case the 
 b) the processing continues normally (handleError returns `true`) - e.g. the error could be fixed.
 c) message will go into the dead letter handling mechanism
 
+To use the strategy the 'DeadLetterNoSerializationErrorDeserializer' needs to be used as a wrapper for key and value deserializer.
+
 Additional information is being added to the header of the message
 a) the exception
 b) the number of retries
