@@ -1,13 +1,9 @@
 package org.sdase.commons.server.kafka.consumer.strategies.deadletter;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.util.Map;
-
+import com.github.ftrossbach.club_topicana.core.ExpectedTopicConfiguration;
+import io.dropwizard.Configuration;
+import io.dropwizard.setup.Environment;
+import io.prometheus.client.SimpleTimer;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -15,193 +11,235 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.sdase.commons.server.kafka.KafkaBundle;
-import org.sdase.commons.server.kafka.builder.ProducerRegistration;
-import org.sdase.commons.server.kafka.config.ProducerConfig;
 import org.sdase.commons.server.kafka.consumer.ErrorHandler;
 import org.sdase.commons.server.kafka.consumer.KafkaHelper;
 import org.sdase.commons.server.kafka.consumer.MessageHandler;
-import org.sdase.commons.server.kafka.consumer.StopListenerException;
 import org.sdase.commons.server.kafka.consumer.strategies.MessageListenerStrategy;
 import org.sdase.commons.server.kafka.exception.ConfigurationException;
 import org.sdase.commons.server.kafka.producer.MessageProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.dropwizard.Configuration;
-import io.prometheus.client.SimpleTimer;
+import java.io.*;
+import java.util.Map;
+
+import static java.util.Objects.isNull;
 
 /**
- * {@link MessageListenerStrategy} Strategy that stores messages with processing
- * errors to a separate queue. It allows a configurable number of retries for a
- * failed message until it will be pushed to a third queue.
+ * {@link MessageListenerStrategy Strategy} that stores messages with processing
+ * errors to a separate topic. It allows a configurable number of retries for a
+ * failed message until it will be pushed to a third topic (dead letter topic).
+ *
+ * Messages can be manually copied from the dead letter topic back to the original topic using
+ * the {@link DeadLetterTask dead letter admin task} which will be automatically registered in
+ * your application.
  */
-public class DeadLetterMLS<K, V> extends MessageListenerStrategy<K, V> {
+public class DeadLetterMLS<K extends Serializable, V extends Serializable> extends MessageListenerStrategy<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(DeadLetterMLS.class);
-	private final MessageHandler<K, V> handler;
-	private final ErrorHandler<K, V> errorHandler;
-	private String consumerName;
+    private static final Logger LOGGER = LoggerFactory.getLogger(DeadLetterMLS.class);
+    private static final String EXCEPTION = "Exception";
+    private static final String RETRIES = "Retries";
+    private final MessageHandler<K, V> handler;
+    private final ErrorHandler<K, V> errorHandler;
+    private String consumerName;
 
-	private static final String RETRY_TOPIC_CONFIG_POSTFIX = "retryTopic";
-	private static final String DEAD_LETTER_TOPIC_CONFIG_POSTFIX = "deadLetterTopic";
+    private final MessageProducer<byte[], byte[]> retryProducer;
+    private final MessageProducer<byte[], byte[]> deadLetterTopicProducer;
+    private final int maxNumberOfRetries;
 
-	private MessageProducer<byte[], byte[]> retryProducer;
-	private MessageProducer<byte[], byte[]> deadLetterTopicProducer;
-	private int maxNumberOfRetries;
+    /**
+     *
+     * @param environment environment of the dropwizard app that will be used to create an admin task
+     * @param handler handler that processes the message
+     * @param bundle kafka bundle
+     * @param sourceTopicConfigName will be used as a prefix to find the configuration for
+     * *                        the retry and dead letter topic.
+     * @param maxNumberOfRetries number of automated retries before the message will end in dead letter queue
+     * @param errorHandler error handler that will be used if the handler throws an exception
+     */
+    public DeadLetterMLS(Environment environment, MessageHandler<K, V> handler, KafkaBundle<? extends Configuration> bundle,
+                         String sourceTopicConfigName, String sourceTopicConsumerConfigName, int maxNumberOfRetries, int retryIntervalMS, ErrorHandler<K, V> errorHandler) {
+        this.handler = handler;
 
-	/**
-	 * Constructor for dead letter message listener strategy
-	 * 
-	 * @param handler         handler that processes the message
-	 * @param bundle          kafka bundle
-	 * @param sourceTopicName will be used as a prefix to find the configuration for
-	 *                        the retry and dead letter topic. The configuration key
-	 *                        of the retry topic needs to be sourceTopicName +
-	 *                        "retryTopic". The configuration key of the dead letter
-	 *                        topic needs to be sourceTopicName + "deadLetterTopic".
-	 * 
-	 */
-	public DeadLetterMLS(MessageHandler<K, V> handler, KafkaBundle<? extends Configuration> bundle,
-			String sourceTopicName, int maxNumberOfRetries, ErrorHandler<K, V> errorHandler) {
-		this.handler = handler;
+        final ExpectedTopicConfiguration sourceTopicConfiguration = bundle.getTopicConfiguration(sourceTopicConfigName);
 
-		// Producer for retry
-		ProducerConfig retryProducerConfig = ProducerConfig.builder().withClientId(
-				bundle.getTopicConfiguration(sourceTopicName + RETRY_TOPIC_CONFIG_POSTFIX).getTopicName() + "-Producer")
-				.build();
+        this.retryProducer = bundle.registerProducer(DeadLetterUtil.createRetryProducer(bundle, sourceTopicConfiguration, sourceTopicConfigName));
+        this.deadLetterTopicProducer = bundle.registerProducer(DeadLetterUtil.createDeadLetterProducer(bundle, sourceTopicConfiguration, sourceTopicConfigName));
+        this.maxNumberOfRetries = maxNumberOfRetries;
+        this.errorHandler = errorHandler;
 
-		this.retryProducer = bundle.registerProducer(ProducerRegistration.<byte[], byte[]>builder()
-				.forTopic(bundle.getTopicConfiguration(sourceTopicName + RETRY_TOPIC_CONFIG_POSTFIX))
-				.checkTopicConfiguration().withProducerConfig(retryProducerConfig)
-				.withKeySerializer(new ByteArraySerializer()).withValueSerializer(new ByteArraySerializer()).build());
+        final DeadLetterTopicHandling deadLetterTopicHandling = new DeadLetterTopicHandling(
+            DeadLetterUtil.getRetryTopicName(sourceTopicConfiguration),
+            sourceTopicConfiguration.getTopicName(),
+            DeadLetterUtil.getDeadLetterTopicName(sourceTopicConfiguration),
+            bundle,
+            retryIntervalMS, sourceTopicConsumerConfigName
+        );
 
-		// producer without retry (final topic)
-		ProducerConfig deadProducerConfig = ProducerConfig.builder()
-				.withClientId(
-						bundle.getTopicConfiguration(sourceTopicName + DEAD_LETTER_TOPIC_CONFIG_POSTFIX).getTopicName()
-								+ "-Producer")
-				.build();
-		this.deadLetterTopicProducer = bundle.registerProducer(ProducerRegistration.<byte[], byte[]>builder()
-				.forTopic(bundle.getTopicConfiguration(sourceTopicName + DEAD_LETTER_TOPIC_CONFIG_POSTFIX))
-				.checkTopicConfiguration().withProducerConfig(deadProducerConfig)
-				.withKeySerializer(new ByteArraySerializer()).withValueSerializer(new ByteArraySerializer()).build());
+        environment
+            .admin()
+            .addTask(deadLetterTopicHandling.getCopyTask());
+    }
 
-		this.maxNumberOfRetries = maxNumberOfRetries;
+    @Override
+    public void processRecords(ConsumerRecords<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> records, KafkaConsumer<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> consumer) {
+        if (consumerName == null) {
+            consumerName = KafkaHelper.getClientId(consumer);
+        }
 
-		this.errorHandler = errorHandler;
-	}
+        records.forEach(r -> processRecord(r, consumer));
+    }
 
-	@Override
-	public void processRecords(ConsumerRecords<K, V> records, KafkaConsumer<K, V> consumer) {
-		if (consumerName == null) {
-			consumerName = KafkaHelper.getClientId(consumer);
-		}
+    @SuppressWarnings("deprecation") // record.checksum() is deprecated as of Kafka 0.11.0
+    private void processRecord(ConsumerRecord<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> record, KafkaConsumer<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> consumer) {
+        boolean shouldContinue = true;
+        try {
+            if (record.key().hasValue() && record.value().hasValue()) {
+                final SimpleTimer timer = new SimpleTimer();
 
-		records.forEach(r -> processRecord(r, consumer));
-	}
+                handler.handle(new ConsumerRecord<>(record.topic(), record.partition(),record.offset(),
+                    record.timestamp(), record.timestampType(), record.checksum(), record.serializedKeySize(),
+                    record.serializedValueSize(),
+                    record.key().getValue(), record.value().getValue(), record.headers()
+                ));
 
-	private void processRecord(ConsumerRecord<K, V> record, KafkaConsumer<K, V> consumer) {
+                // Prometheus
+                final double elapsedSeconds = timer.elapsedSeconds();
+                consumerProcessedMsgHistogram.observe(elapsedSeconds, consumerName, record.topic());
 
-		LOGGER.debug("Handling message for {}", record.key());
+                if (LOGGER.isTraceEnabled()) {
+                    LOGGER.trace("calculated duration {} for message consumed by {} from {}", elapsedSeconds, consumerName, record.topic());
+                }
+            } else {
+                shouldContinue = handleDeserializationException(record);
+            }
+        } catch (RuntimeException e) {
+            shouldContinue = handleError(record, e);
+        } finally {
+            if (shouldContinue)
+                consumer.commitSync();
+        }
+    }
 
-		try {
-			SimpleTimer timer = new SimpleTimer();
-			handler.handle(record);
+    private boolean handleDeserializationException(ConsumerRecord<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> record){
+        if (record.key().hasError()){
+            return handleError(record, record.key().getError().getException());
+        }
+        return handleError(record, record.value().getError().getException());
+    }
 
-			// Prometheus
-			double elapsedSeconds = timer.elapsedSeconds();
-			consumerProcessedMsgHistogram.observe(elapsedSeconds, consumerName, record.topic());
+    @SuppressWarnings("deprecation") // record.checksum() is deprecated as of Kafka 0.11.0
+    private boolean handleError(ConsumerRecord<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> record, RuntimeException e) {
+        try {
+            final K recordVKey = record.key().hasValue() ? null : record.key().getValue();
+            final V recordValue = record.value().hasValue() ? null : record.value().getValue();
+            final boolean shouldContinue = errorHandler.handleError(
+                new ConsumerRecord<>(
+                    record.topic(), record.partition(),record.offset(),
+                    record.timestamp(), record.timestampType(), record.checksum(), record.serializedKeySize(),
+                    record.serializedValueSize(),
+                    recordVKey, recordValue, record.headers()),
+                e,
+                null
+            );
 
-			if (LOGGER.isTraceEnabled()) {
-				LOGGER.trace("calculated duration {} for message consumed by {} from {}", elapsedSeconds, consumerName,
-						record.topic());
-			}
-			consumer.commitSync();
-		} catch (RuntimeException e) {
-			try {
-				boolean shouldContinue = errorHandler.handleError(record, e, consumer);
-				if (!shouldContinue) {
-					throw new StopListenerException(e);
-				} else {
-					consumer.commitSync();
-				}
-			} catch (Exception innerException) {
-				if (innerException instanceof StopListenerException) {
-					throw innerException;
-				}
+            return shouldContinue;
+        } catch (Exception innerException) {
+            deadLetterHandling(createByteArrayRecord(record), e);
+        }
+        return true;
+    }
 
-				deadLetterHandling(record, innerException);
-				consumer.commitSync();
-			}
-		}
-	}
+    private void deadLetterHandling(ConsumerRecord<byte[], byte[]> record, Exception e) {
+        final int executedNumberOfRetries = getRetryInformationFromRecord(record) + 1;
 
-	private void deadLetterHandling(ConsumerRecord<K, V> record, Exception e) {
-		int executedNumberOfRetries = getRetryInformationFromRecord(record) + 1;
+        Headers headersList = new RecordHeaders();
+        headersList.add(EXCEPTION, serialize(e));
+        headersList.add(RETRIES, serialize(executedNumberOfRetries));
 
-		Headers headersList = new RecordHeaders();
-		headersList.add("Exception", serialize(e));
-		headersList.add("Retries", serialize(executedNumberOfRetries));
+        if (executedNumberOfRetries <= maxNumberOfRetries) {
+            retryProducer.send(record.key(), record.value(), headersList);
+        } else {
+            deadLetterTopicProducer.send(record.key(), record.value(), headersList);
+        }
+    }
 
-		if (executedNumberOfRetries <= maxNumberOfRetries) {
-			retryProducer.send(serialize(record.key()), serialize(record.value()), headersList);
-		} else {
-			deadLetterTopicProducer.send(serialize(record.key()), serialize(record.value()), headersList);
-		}
-	}
+    @Override
+    public void commitOnClose(KafkaConsumer<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> consumer) {
+        try {
+            consumer.commitSync();
+        } catch (CommitFailedException e) {
+            LOGGER.error("Commit failed", e);
+        }
+    }
 
-	@Override
-	public void commitOnClose(KafkaConsumer<K, V> consumer) {
-		try {
-			consumer.commitSync();
-		} catch (CommitFailedException e) {
-			LOGGER.error("Commit failed", e);
-		}
-	}
+    @Override
+    public void verifyConsumerConfig(Map<String, String> config) {
+        if (Boolean.parseBoolean(config.getOrDefault("enable.auto.commit", "false"))) {
+            throw new ConfigurationException(
+                "The strategy should not auto commit since the strategy does that manually. But property 'enable.auto.commit' in consumer config is set to 'true'");
+        }
+    }
 
-	@Override
-	public void verifyConsumerConfig(Map<String, String> config) {
-		if (Boolean.valueOf(config.getOrDefault("enable.auto.commit", "false"))) {
-			throw new ConfigurationException(
-					"The strategy should not auto commit since the strategy does that manually. But property 'enable.auto.commit' in consumer config is set to 'true'");
-		}
-	}
+    private int getRetryInformationFromRecord(ConsumerRecord<byte[], byte[]> record) {
+        for (final Header pair : record.headers()) {
+            if (pair.key().equalsIgnoreCase("retries") && pair.value() != null) {
+                Object deserializedValue = deserialize(pair.value());
+                if (deserializedValue instanceof Integer)
+                    return (int) deserializedValue;
+            }
+        }
 
-	private int getRetryInformationFromRecord(ConsumerRecord<K, V> record) {
-		for (Header pair : record.headers()) {
-			if (pair.key().equalsIgnoreCase("retries") && pair.value() != null) {
-				Object deserializedValue = deserialize(pair.value());
-				if (deserializedValue instanceof Integer)
-					return (int) deserializedValue;
-			}
-		}
+        return 0;
+    }
 
-		return 0;
-	}
+    private static byte[] serialize(Serializable obj) {
+        try {
+            final ByteArrayOutputStream out = new ByteArrayOutputStream();
+            final ObjectOutputStream os = new ObjectOutputStream(out);
 
-	private static byte[] serialize(Object obj) {
-		try {
-			ByteArrayOutputStream out = new ByteArrayOutputStream();
-			ObjectOutputStream os = new ObjectOutputStream(out);
-			os.writeObject(obj);
-			return out.toByteArray();
-		} catch (IOException e) {
-			LOGGER.error(e.getMessage());
-			return null;
-		}
-	}
+            os.writeObject(obj);
 
-	private static Object deserialize(byte[] obj) {
-		try {
-			ByteArrayInputStream bis = new ByteArrayInputStream(obj);
-			ObjectInput in = new ObjectInputStream(bis);
-			return in.readObject();
-		} catch (IOException | ClassNotFoundException e) {
-			LOGGER.info(e.getMessage());
-			return null;
-		}
-	}
+            return out.toByteArray();
+        } catch (IOException e) {
+            LOGGER.error("Serialization failed. ", e);
+            return null; // NOSONAR
+        }
+    }
+
+    private static Object deserialize(byte[] obj) {
+        try {
+            final ByteArrayInputStream bis = new ByteArrayInputStream(obj);
+            final ObjectInputStream in = new ObjectInputStream(bis);
+
+            return in.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            LOGGER.error("Deserialization failed.", e);
+            return null;
+        }
+    }
+
+    @SuppressWarnings("deprecation") // record.checksum() is deprecated as of Kafka 0.11.0
+    private ConsumerRecord<byte[], byte[]> createByteArrayRecord(ConsumerRecord<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> record) {
+
+        final byte[] keyPayload = getByteArrayPayload(record.key());
+        final byte[] valuePayload = getByteArrayPayload(record.value());
+
+        return new ConsumerRecord<>(record.topic(), record.partition(),record.offset(), record.timestamp(),
+            record.timestampType(), record.checksum(), record.serializedKeySize(), record.serializedValueSize(),
+            keyPayload, valuePayload, record.headers()
+        );
+    }
+
+    private <T extends Serializable> byte[] getByteArrayPayload(DeadLetterDeserializerErrorOrValue<T> recordTupleValue) {
+        if (isNull(recordTupleValue) || (isNull(recordTupleValue.getValue()) && isNull(recordTupleValue.getError()))) {
+            return null; // NOSONAR
+        }
+
+        return recordTupleValue.hasValue()
+            ? serialize(recordTupleValue.getValue())
+            : recordTupleValue.getError().getErrorPayload();
+    }
 
 }

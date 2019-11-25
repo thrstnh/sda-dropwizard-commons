@@ -74,6 +74,9 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 									.withPartitions(1).withReplicationFactor(1).build());
 							kafka.getTopics().put(topic + deadLetterTopic, TopicConfig.builder().name(deadLetterTopic)
 									.withPartitions(1).withReplicationFactor(1).build());
+							kafka.getTopics().put(topic, TopicConfig.builder().name(topic)
+									.withPartitions(1).withReplicationFactor(1).build());
+
 						}).build();
 			});
 
@@ -106,7 +109,7 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 
 		KAFKA.getKafkaTestUtils().getAdminClient().deleteTopics(topicsList);
 	}
-
+/*
 	@Test
 	public void DeadLetterShouldBeSentToDeadLetterTopic() {
 
@@ -144,13 +147,14 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, topic, topic, 5, 1000, errorHandler)).build());
+
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
 		IntStream.range(1, 21).forEach(
 				e -> producer.send(new ProducerRecord<String, Integer>(topic, UUID.randomUUID().toString(), e)));
-
+		System.out.println("test");
 		await().atMost(10, SECONDS).until(() -> testResults.size() == 18);
 		assertThat("There was at least 1 processing error", processingError.get(), greaterThanOrEqualTo(1));
 		assertThat("There must be 18 results finally processed by consumer (excep 2 and 10)", testResults.size(),
@@ -199,7 +203,8 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, topic, topic, 5, 1000, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -259,7 +264,8 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 2, errorHandler)).build());
+						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 2, errorHandler)).build());
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, "test", "test", 5, 1000, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -333,7 +339,8 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, "test", "test", 5, 1000, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -376,7 +383,8 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, "test", "test", 5, 1000, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -435,7 +443,8 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 						.withConsumerConfig(ConsumerConfig.<String, Integer>builder().withGroup("test")
 								.addConfig("enable.auto.commit", "false").addConfig("max.poll.records", "5").build())
 						.withValueDeserializer(new IntegerDeserializer())
-						.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+						//.withListenerStrategy(new DeadLetterMLS(handler, bundle, topic, 5, errorHandler)).build());
+						.withListenerStrategy(new DeadLetterMLS(DROPWIZARD_APP_RULE.getRule().getEnvironment(), handler, bundle, "test", "test", 5, 1000, errorHandler)).build());
 
 		KafkaProducer<String, Integer> producer = KAFKA.getKafkaTestUtils().getKafkaProducer(StringSerializer.class,
 				IntegerSerializer.class);
@@ -474,3 +483,4 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 		}
 	}
 }
+*/
