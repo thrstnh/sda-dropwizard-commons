@@ -15,7 +15,7 @@ public final class DeadLetterDeserializerErrorOrValue<T> {
     }
 
     public static <T> DeadLetterDeserializerErrorOrValueBuilder<T> builder() {
-        return new DeadLetterDeserializerErrorOrValueBuilder<T>();
+        return new DeadLetterDeserializerErrorOrValueBuilder<>();
     }
 
     public static <T> DeadLetterDeserializerErrorOrValue<T> error(byte[] errorPayload, RuntimeException exception) {

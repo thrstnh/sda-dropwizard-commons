@@ -37,7 +37,6 @@ public class RetryMechanism implements ErrorHandler<byte[],byte[]>, MessageHandl
         final long threadId = Thread.currentThread().getId();
 
         try {
-            LOGGER.info("current thread: {}", threadId);
             Thread.sleep(retryIntervalMS);
         } catch (InterruptedException ex) {
             LOGGER.error("Thread {} was interrupted", threadId, ex);
