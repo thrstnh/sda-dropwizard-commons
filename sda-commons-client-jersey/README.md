@@ -101,6 +101,9 @@ wrapping `javax.ws.rs.ProcessingException` or subclasses of `javax.ws.rs.WebAppl
 - `javax.ws.rs.ClientErrorException` for client errors
 - `javax.ws.rs.ServerErrorException` for server errors
 
+If the `ClientRequestException` exception is handled in the application code **the application must `close()` the 
+exception**.
+
 If a `javax.ws.rs.core.Response` is defined as return type, Http errors and redirects can be read from the `Response`
 object. **Remember to always close the `Response` object. It references open socket streams.**
 
@@ -125,7 +128,11 @@ MyResource myResource = ClientErrorUtil.convertExceptions(() -> requestBuilder.g
 ```
 
 If the error should be handled in the application, the exception may be caught and the error can be read from the 
-response:
+response.
+If the `ClientRequestException` is caught the implementation **must `close()` it**.
+If it is not handled or rethrown, the `ClientRequestExceptionMapper` will take care about closing the underlying open 
+socket.
+Therefore the `ClientRequestException` **must not** be wrapped as `cause` in another exception!
 
 ```java
 Client client = clientFactory.platformClient().buildGenericClient("test")
@@ -135,6 +142,7 @@ try {
 }
 catch (ClientRequestException e) {
    ApiError error = ClientErrorUtil.readErrorBody(e);
+   e.close();
 }
 ```
 
@@ -143,3 +151,19 @@ catch (ClientRequestException e) {
 To support sending multipart requests like file uploads, `sda-commons-shared-forms` has to be added to the project. 
 
 The client is the configured automatically to support multipart.
+
+## Tips and Tricks
+
+### 3rd Party `javax.ws.rs-api` Client Implementations in Classpath
+
+The clients used in sda-commons require the Jersey Client implementation. 
+If you are facing problems with other `javax.ws.rs-api` implementations in the classpath (e.g. RestEasy which comes
+with the Keycloak SDK) the Jersey Client Builder must be propagated in your project as service.
+Therefore the service definition `src/main/resources/META-INF/services/javax.ws.rs.client.ClientBuilder` must be added
+to your project containing:
+
+```
+org.glassfish.jersey.client.JerseyClientBuilder
+```
+
+This works if the library that requires the other implementation does not rely on the Java ServiceLoader.
