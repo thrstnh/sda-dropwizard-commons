@@ -35,6 +35,9 @@ import static java.util.Objects.isNull;
  * Messages can be manually copied from the dead letter topic back to the original topic using
  * the {@link DeadLetterTask dead letter admin task} which will be automatically registered in
  * your application.
+ *
+ * To use the strategy the {@link DeadLetterNoSerializationErrorDeserializer} needs to be used as a wrapper for
+ * key and value deserializer
  */
 public class DeadLetterMLS<K extends Serializable, V extends Serializable> extends MessageListenerStrategy<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> {
 
