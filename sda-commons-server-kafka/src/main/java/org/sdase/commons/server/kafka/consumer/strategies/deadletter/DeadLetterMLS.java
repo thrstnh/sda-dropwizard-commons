@@ -140,7 +140,8 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
         try {
             final K recordVKey = record.key().hasValue() ? null : record.key().getValue();
             final V recordValue = record.value().hasValue() ? null : record.value().getValue();
-            final boolean shouldContinue = errorHandler.handleError(
+
+            return errorHandler.handleError(
                 new ConsumerRecord<>(
                     record.topic(), record.partition(),record.offset(),
                     record.timestamp(), record.timestampType(), record.checksum(), record.serializedKeySize(),
@@ -149,8 +150,6 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
                 e,
                 null
             );
-
-            return shouldContinue;
         } catch (Exception innerException) {
             deadLetterHandling(createByteArrayRecord(record), e);
         }

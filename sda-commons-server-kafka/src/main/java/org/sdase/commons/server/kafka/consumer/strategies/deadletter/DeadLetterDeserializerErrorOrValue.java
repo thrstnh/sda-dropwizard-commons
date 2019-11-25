@@ -90,7 +90,7 @@ public final class DeadLetterDeserializerErrorOrValue<T> {
         }
 
         public DeadLetterDeserializerErrorOrValue<T> build() {
-            return new DeadLetterDeserializerErrorOrValue<T>(error, value);
+            return new DeadLetterDeserializerErrorOrValue<>(error, value);
         }
 
         public String toString() {
