@@ -16,26 +16,25 @@ import org.sdase.commons.server.kafka.producer.KafkaMessageProducer;
 /**
  * This class is used for the retry mechanism of the dead letter strategy. The first part of the strategy comes with an automated retry mechanism that will be executed one the strategy is initialized. It also comes with an admin task that is used to copy the messages from the dead letter topic back to the application topic
  */
-public class DeadLetterTopicHandling {
+public class RetryMechanismHandler {
 
-    private final DeadLetterTask copyTask;
+    private KafkaMessageProducer retryProducer;
 
     /**
      *
      * @param retryTopicName name of the retry topic
      * @param sourceTopicName name of the source topic of the application
-     * @param deadLetterTopicName name of the dead letter topic
      * @param bundle kafka bundle
      * @param intervalMS the interval which is used for the automated message retry
      */
-    public DeadLetterTopicHandling(String retryTopicName, String sourceTopicName, String deadLetterTopicName, KafkaBundle<? extends Configuration> bundle, long intervalMS, String sourceTopicConsumerConfigName){
+    public RetryMechanismHandler(String retryTopicName, String sourceTopicName, KafkaBundle<? extends Configuration> bundle, long intervalMS){
 
         final KafkaMessageProducer retryProducer = (KafkaMessageProducer<byte[], byte[]>) bundle.registerProducer(createProducer(sourceTopicName));
         final RetryMechanism retryMechanism = new RetryMechanism(retryProducer, intervalMS);
 
         bundle.createMessageListener(createConsumerForRetryTopic(retryTopicName, retryMechanism, retryMechanism));
 
-        copyTask = new DeadLetterTask(bundle, sourceTopicConsumerConfigName, deadLetterTopicName, retryProducer);
+        this.retryProducer = retryProducer;
     }
 
     private MessageListenerRegistration<byte[], byte[]> createConsumerForRetryTopic(String sourceTopic, MessageHandler<byte[], byte[]> messageHandler, ErrorHandler<byte[], byte[]> errorHandler) {
@@ -66,8 +65,5 @@ public class DeadLetterTopicHandling {
             .build();
     }
 
-    public DeadLetterTask getCopyTask(){
-        return copyTask;
-    }
-
+    public KafkaMessageProducer getRetryProducer(){return retryProducer;}
 }
