@@ -81,17 +81,11 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
 	@ClassRule
 	public static final TestRule CHAIN = RuleChain.outerRule(KAFKA).around(DROPWIZARD_APP_RULE);
 
-	private StringDeserializer deserializer = new StringDeserializer();
-
-	private int numberExceptionThrown = 0;
-	private List<String> results = Collections.synchronizedList(new ArrayList<>());
-
 	private KafkaBundle<KafkaTestConfiguration> bundle = ((KafkaTestApplication) DROPWIZARD_APP_RULE.getRule()
 			.getApplication()).kafkaBundle();
 
 	@Before
 	public void setup() throws InterruptedException {
-		results.clear();
 		// sleep needed, otherwise execution of multiple tests fail. Seems like in
 		// between some time
 		// for cleanup is needed.

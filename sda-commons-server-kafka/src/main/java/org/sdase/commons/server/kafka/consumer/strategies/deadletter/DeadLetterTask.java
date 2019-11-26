@@ -13,6 +13,7 @@ import org.sdase.commons.server.kafka.producer.KafkaMessageProducer;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Random;
 
 public class DeadLetterTask extends Task {
@@ -44,10 +45,7 @@ public class DeadLetterTask extends Task {
             DeadLetterUtil.getDeadLetterConsumerConfig(bundle, sourceTopicConsumerConfigName),
             new Random().nextInt()
         );
-        final Collection<String> topics = new ArrayList<>();
-
-        topics.add(deadLetterTopic);
-        consumer.subscribe(topics);
+        consumer.subscribe(Collections.singletonList(deadLetterTopic));
 
         boolean continueReading = true;
 

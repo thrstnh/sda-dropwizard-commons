@@ -73,17 +73,18 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
         this.maxNumberOfRetries = maxNumberOfRetries;
         this.errorHandler = errorHandler;
 
-        final DeadLetterTopicHandling deadLetterTopicHandling = new DeadLetterTopicHandling(
+        final RetryMechanismHandler retryMechanismHandler = new RetryMechanismHandler(
             DeadLetterUtil.getRetryTopicName(sourceTopicConfiguration),
             sourceTopicConfiguration.getTopicName(),
-            DeadLetterUtil.getDeadLetterTopicName(sourceTopicConfiguration),
             bundle,
-            retryIntervalMS, sourceTopicConsumerConfigName
+            retryIntervalMS
         );
+
+        DeadLetterTask copyTask = new DeadLetterTask(bundle, sourceTopicConsumerConfigName, DeadLetterUtil.getDeadLetterTopicName(sourceTopicConfiguration), retryMechanismHandler.getRetryProducer());
 
         environment
             .admin()
-            .addTask(deadLetterTopicHandling.getCopyTask());
+            .addTask(copyTask);
     }
 
     @Override
@@ -121,10 +122,12 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
         } catch (RuntimeException e) {
             shouldContinue = handleError(record, e);
         } finally {
-            if (shouldContinue)
+            if (shouldContinue){
                 consumer.commitSync();
-            else
+            }
+            else{
                 throw new StopListenerException(new RuntimeException("Listener Stopped because error handler returned false")); //NOSONAR
+            }
         }
     }
 
@@ -191,8 +194,9 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
         for (final Header pair : record.headers()) {
             if (pair.key().equalsIgnoreCase("retries") && pair.value() != null) {
                 Object deserializedValue = deserialize(pair.value());
-                if (deserializedValue instanceof Integer)
+                if (deserializedValue instanceof Integer){
                     return (int) deserializedValue;
+                }
             }
         }
 

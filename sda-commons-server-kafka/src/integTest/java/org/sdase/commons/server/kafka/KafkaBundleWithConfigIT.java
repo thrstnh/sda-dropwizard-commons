@@ -27,7 +27,10 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.junit.*;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TestRule;
 import org.sdase.commons.server.kafka.builder.MessageHandlerRegistration;
@@ -488,7 +491,6 @@ public class KafkaBundleWithConfigIT {
    }
 
    @Test
-   @Ignore
    public void kafkaConsumerReceivesMessagesAsyncCommit() {
       String topic = "kafkaConsumerReceivesMessagesAsyncCommit";
       StringDeserializer deserializer = new StringDeserializer();
