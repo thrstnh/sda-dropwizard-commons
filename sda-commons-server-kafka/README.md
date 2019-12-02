@@ -336,9 +336,9 @@ that messages are redelivered after re-balance activities.
 This strategy reads messages from the broker and passes the records to a message handler that must be implemented by the user of the bundle. 
 
 The strategy requires `enable.auto.commit` set to `false` and the underlying consumer commits records for each partition. In case of processing errors the 
-handler should throw `ProcessingErrorRetryException` which is then delegated to the `ErrorHandler` where finally can be decided if the processing should be
-stopped or retried (handleError returns `false`). In case of retry the consumer set the offset on the failing record and interrupt the processing of further 
-records. The next poll will retry the records on this partition starting with the failing record.  
+handler should throw `ProcessingErrorRetryException` which is then delegated to either the self-implemented `ErrorHandler` where finally can be decided if the processing should be stopped or retried (handleError returns any RuntimeException). In case of retry the consumer set the offset on the failing record and interrupt the processing of further records. The next poll will retry the records on this partition starting with the failing record.  
+
+Instead of providing a self-implemented error-handler you can simply don't provide one and the default error handler will be used which simply either returns the thrown RuntimeException or throws a new RuntimeException if there is none occured before. This leads to the wanted, expected, and configured Dead-Letter-Handling.
 
 #### Dead Letter Handling MessageListenerStrategy
 This strategy offers a way to retry the processing of failed records, without blocking the running process. To address the problem of blocked batches, we set
@@ -358,16 +358,29 @@ which is either the expected response or its placement elsewhere to be separatel
 This strategy reads messages from the broker and passes the records to a message handler that must be implemented by the user of the bundle.
 
 The strategy requires `enable.auto.commit` set to `false` and the underlying consumer commits the records. In case of processing errors the handler should
-throw any `Exception` which is then delegated to the `ErrorHandler` where finally can be decided if
-a). the processing should be stopped (handleError returns `false`). In case the handleError returns `false` the offset is not being commited and the listener will be stopped.
-b) the processing continues normally (handleError returns `true`) - e.g. the error could be fixed.
-c) message will go into the dead letter handling mechanism (handleError throws a Runtime Exception)
+throw any `RuntimeException` which is then delegated to the `ErrorHandler` where finally can be decided if
+* the processing should be stopped (handleError returns `false`). In case the handleError returns `false` the offset is not being commited and the listener will be stopped.
+* the processing continues normally (handleError returns `true`) - e.g. the error could be fixed.
+* message will go into the dead letter handling mechanism (handleError throws a Runtime Exception)
 
 To use the strategy the `DeadLetterNoSerializationErrorDeserializer` needs to be used as a wrapper for key and value deserializer.
 
 Additional information is being added to the header of the message
-a) the exception
-b) the number of retries
+* the exception
+* the number of retries
+
+Example for setting it up in your Application:
+
+```
+MessageListenerRegistration.<Pair<String, String>, CareApplication> builder()
+            .withDefaultListenerConfig()
+            .forTopicConfigs(Collections.singletonList((this.kafkaBundle.getTopicConfiguration("sourceTopicConfigName"))))
+            .withConsumerConfig("sourceTopicConfigName")
+            .withKeyDeserializer(new DeadLetterNoSerializationErrorDeserializer(new SDADeserializer<>((Class<Pair<String, String>>)(Object)Pair.class)))
+            .withValueDeserializer(new DeadLetterNoSerializationErrorDeserializer(new SDAFormFieldStringPairDeserializer<>(CareApplication.class)))
+            .withListenerStrategy(new DeadLetterMLS(environment, careApplicationService, kafkaBundle, "sourceTopicConsumerConfigName", "sourceTopicConsumerConfigName", 5, 5_000))
+            .build();
+```
 
 ## Create preconfigured consumers and producers
 To give the user more flexibility the bundle allows to create consumers and producers either by name of a valid configuration from the config yaml or 

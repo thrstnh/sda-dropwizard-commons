@@ -4,10 +4,7 @@ import com.github.ftrossbach.club_topicana.core.ExpectedTopicConfiguration;
 import io.dropwizard.Configuration;
 import io.dropwizard.setup.Environment;
 import io.prometheus.client.SimpleTimer;
-import org.apache.kafka.clients.consumer.CommitFailedException;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -39,7 +36,7 @@ import static java.util.Objects.isNull;
  * To use the strategy the {@link DeadLetterNoSerializationErrorDeserializer} needs to be used as a wrapper for
  * key and value deserializer
  */
-public class DeadLetterMLS<K extends Serializable, V extends Serializable> extends MessageListenerStrategy<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> { //NOSONAR
+public class DeadLetterMLS<K extends Serializable, V extends Serializable> extends MessageListenerStrategy<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> implements ErrorHandler<K, V> { //NOSONAR
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DeadLetterMLS.class);
     private static final String EXCEPTION = "Exception";
@@ -53,17 +50,27 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
     private final int maxNumberOfRetries;
 
     /**
-     *
-     * @param environment environment of the dropwizard app that will be used to create an admin task
-     * @param handler handler that processes the message
-     * @param bundle kafka bundle
-     * @param sourceTopicConfigName will be used as a prefix to find the configuration for
-     * *                        the retry and dead letter topic.
-     * @param maxNumberOfRetries number of automated retries before the message will end in dead letter queue
-     * @param errorHandler error handler that will be used if the handler throws an exception
+     * @param environment           environment of the dropwizard app that will be used to create an admin task
+     * @param handler               handler that processes the message
+     * @param bundle                kafka bundle
+     * @param sourceTopicConfigName will be used as a prefix to find the configuration for the retry and dead letter topic.
+     * @param maxNumberOfRetries    number of automated retries before the message will end in dead letter queue
      */
     public DeadLetterMLS(Environment environment, MessageHandler<K, V> handler, KafkaBundle<? extends Configuration> bundle,
-                         String sourceTopicConfigName, String sourceTopicConsumerConfigName, int maxNumberOfRetries, int retryIntervalMS, ErrorHandler<K, V> errorHandler) {
+                         String sourceTopicConfigName, String sourceTopicConsumerConfigName, int maxNumberOfRetries, int retryIntervalMS) {
+        this(environment, handler, null, bundle, sourceTopicConfigName, sourceTopicConsumerConfigName, maxNumberOfRetries, retryIntervalMS);
+    }
+
+    /**
+     * @param environment           environment of the dropwizard app that will be used to create an admin task
+     * @param handler               handler that processes the message
+     * @param errorHandler          error handler that will be used if the handler throws an exception
+     * @param bundle                kafka bundle
+     * @param sourceTopicConfigName will be used as a prefix to find the configuration for the retry and dead letter topic.
+     * @param maxNumberOfRetries    number of automated retries before the message will end in dead letter queue
+     */
+    public DeadLetterMLS(Environment environment, MessageHandler<K, V> handler, ErrorHandler<K, V> errorHandler, KafkaBundle<? extends Configuration> bundle,
+                         String sourceTopicConfigName, String sourceTopicConsumerConfigName, int maxNumberOfRetries, int retryIntervalMS) { //NOSONAR
         this.handler = handler;
 
         final ExpectedTopicConfiguration sourceTopicConfiguration = bundle.getTopicConfiguration(sourceTopicConfigName);
@@ -120,7 +127,7 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
                 shouldContinue = handleDeserializationException(record);
             }
         } catch (RuntimeException e) {
-            shouldContinue = handleError(record, e);
+            shouldContinue = handleErrorInternal(record, e);
         } finally {
             if (shouldContinue){
                 consumer.commitSync();
@@ -133,30 +140,29 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
 
     private boolean handleDeserializationException(ConsumerRecord<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> record){
         if (record.key().hasError()){
-            return handleError(record, record.key().getError().getException());
+            return handleErrorInternal(record, record.key().getError().getException());
         }
-        return handleError(record, record.value().getError().getException());
+        return handleErrorInternal(record, record.value().getError().getException());
     }
 
     @SuppressWarnings("deprecation") // record.checksum() is deprecated as of Kafka 0.11.0
-    private boolean handleError(ConsumerRecord<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> record, RuntimeException e) {
+    private boolean handleErrorInternal(ConsumerRecord<DeadLetterDeserializerErrorOrValue<K>, DeadLetterDeserializerErrorOrValue<V>> record, RuntimeException e) {
         try {
             final K recordVKey = record.key().hasValue() ? null : record.key().getValue();
             final V recordValue = record.value().hasValue() ? null : record.value().getValue();
-
-            return errorHandler.handleError(
-                new ConsumerRecord<>(
-                    record.topic(), record.partition(),record.offset(),
+            final ConsumerRecord<K, V> recordForConsumerHandler = new ConsumerRecord<>(
+                    record.topic(), record.partition(), record.offset(),
                     record.timestamp(), record.timestampType(), record.checksum(), record.serializedKeySize(), //NOSONAR
                     record.serializedValueSize(),
-                    recordVKey, recordValue, record.headers()),
-                e,
-                null
-            );
+                    recordVKey, recordValue, record.headers());
+
+            return errorHandler == null
+                    ? handleError(recordForConsumerHandler, e, null)
+                    : errorHandler.handleError(recordForConsumerHandler, e, null);
         } catch (Exception innerException) {
             deadLetterHandling(createByteArrayRecord(record), e);
+            return true;
         }
-        return true;
     }
 
     private void deadLetterHandling(ConsumerRecord<byte[], byte[]> record, Exception e) {
@@ -188,6 +194,15 @@ public class DeadLetterMLS<K extends Serializable, V extends Serializable> exten
             throw new ConfigurationException(
                 "The strategy should not auto commit since the strategy does that manually. But property 'enable.auto.commit' in consumer config is set to 'true'");
         }
+    }
+
+    @Override
+    public boolean handleError(ConsumerRecord<K, V> record, RuntimeException e, Consumer<K, V> consumer) {
+        if (e != null) {
+            LOGGER.debug("Returning original received exception in handleError", e);
+            throw e;
+        }
+        throw new RuntimeException("Unknown error occured"); //NOSONAR
     }
 
     private int getRetryInformationFromRecord(ConsumerRecord<byte[], byte[]> record) {

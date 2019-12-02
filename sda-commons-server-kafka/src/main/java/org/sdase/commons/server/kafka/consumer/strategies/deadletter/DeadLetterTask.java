@@ -11,8 +11,6 @@ import org.sdase.commons.server.kafka.KafkaBundle;
 import org.sdase.commons.server.kafka.producer.KafkaMessageProducer;
 
 import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Random;
 
