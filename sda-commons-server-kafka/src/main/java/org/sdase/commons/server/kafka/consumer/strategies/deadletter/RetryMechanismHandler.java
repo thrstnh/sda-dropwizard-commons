@@ -1,15 +1,11 @@
 package org.sdase.commons.server.kafka.consumer.strategies.deadletter;
 
 import io.dropwizard.Configuration;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.*;
 import org.sdase.commons.server.kafka.KafkaBundle;
-import org.sdase.commons.server.kafka.builder.MessageListenerRegistration;
-import org.sdase.commons.server.kafka.builder.ProducerRegistration;
-import org.sdase.commons.server.kafka.config.ConsumerConfig;
-import org.sdase.commons.server.kafka.config.ProducerConfig;
-import org.sdase.commons.server.kafka.consumer.ErrorHandler;
-import org.sdase.commons.server.kafka.consumer.MessageHandler;
+import org.sdase.commons.server.kafka.builder.*;
+import org.sdase.commons.server.kafka.config.*;
+import org.sdase.commons.server.kafka.consumer.*;
 import org.sdase.commons.server.kafka.consumer.strategies.synccommit.SyncCommitMLS;
 import org.sdase.commons.server.kafka.producer.KafkaMessageProducer;
 
@@ -29,12 +25,12 @@ public class RetryMechanismHandler {
      */
     public RetryMechanismHandler(String retryTopicName, String sourceTopicName, KafkaBundle<? extends Configuration> bundle, long intervalMS){
 
-        final KafkaMessageProducer retryProducer = (KafkaMessageProducer<byte[], byte[]>) bundle.registerProducer(createProducer(sourceTopicName));
-        final RetryMechanism retryMechanism = new RetryMechanism(retryProducer, intervalMS);
+        final KafkaMessageProducer producerForRetry = (KafkaMessageProducer<byte[], byte[]>) bundle.registerProducer(createProducer(sourceTopicName));
+        final RetryMechanism retryMechanism = new RetryMechanism(producerForRetry, intervalMS);
 
         bundle.createMessageListener(createConsumerForRetryTopic(retryTopicName, retryMechanism, retryMechanism));
 
-        this.retryProducer = retryProducer;
+        this.retryProducer = producerForRetry;
     }
 
     private MessageListenerRegistration<byte[], byte[]> createConsumerForRetryTopic(String sourceTopic, MessageHandler<byte[], byte[]> messageHandler, ErrorHandler<byte[], byte[]> errorHandler) {
