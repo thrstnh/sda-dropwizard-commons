@@ -65,6 +65,7 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
   private static String topic = "processingErrorsShouldBeForwardedToDeadLetterTopic";
   private static String retryTopic = "processingErrorsShouldBeForwardedToDeadLetterTopic.retry";
   private static String deadLetterTopic = "processingErrorsShouldBeForwardedToDeadLetterTopic.deadletter";
+
   private static final LazyRule<DropwizardAppRule<KafkaTestConfiguration>> DROPWIZARD_APP_RULE = new LazyRule<>(
       () -> DropwizardRuleHelper
           .dropwizardTestAppFrom(KafkaTestApplication.class)
@@ -81,26 +82,15 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
             kafka
                 .getTopics()
                 .put(retryTopic,
-                    TopicConfig
-                        .builder()
-                        .name(retryTopic)
-                        .withPartitions(1)
-                        .withReplicationFactor(1)
-                        .build());
+                    TopicConfig.builder().name(retryTopic).build());
             kafka
                 .getTopics()
                 .put(deadLetterTopic,
-                    TopicConfig
-                        .builder()
-                        .name(deadLetterTopic)
-                        .withPartitions(1)
-                        .withReplicationFactor(1)
-                        .build());
+                    TopicConfig.builder().name(deadLetterTopic).build());
             kafka
                 .getTopics()
                 .put(topic,
-                    TopicConfig.builder().name(topic).withPartitions(1).withReplicationFactor(1)
-                        .build());
+                    TopicConfig.builder().name(topic).build());
 
           })
           .build());
@@ -145,8 +135,9 @@ public class KafkaConsumerWithDeadLetterIT extends KafkaBundleConsts {
   public void setup() throws InterruptedException, ExecutionException {
     // refresh topics by first delete when existing and then recreate
     deleteTopics();
-    // sleep to wait until all topics are deleted
-    Thread.sleep(2000); // NOSONAR
+
+    // sleep to wait until all topics are deleted. Otherwise tests are flanky
+    Thread.sleep(5000); // NOSONAR
   }
 
   private void deleteTopics() throws InterruptedException, ExecutionException {
