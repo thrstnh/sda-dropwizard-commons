@@ -1,0 +1,19 @@
+name: TruffleHog
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: trufflehog-actions-scan
+        uses: Fox32/trufflehog-actions-scan@master
+        with:
+          githubToken: ${{ secrets.TRUFFLEHOG_GITHUB_TOKEN }}
+          # We should maybe disable entropy and find a way to exclude false positives 
+          args: "--regex --entropy=True"
