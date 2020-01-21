@@ -1,0 +1,18 @@
+# Directory of words that are ignored by the spell checker
+AssertJ
+Avro
+Dropwizard
+GitHub
+Gradle
+JavaScript
+JUnit
+Mockito
+Timo
+Pagel
+WireMock
+embeddable
+Servlets
+Clickjacking
+deserialization
+validator
+serializer

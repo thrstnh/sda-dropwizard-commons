@@ -1,0 +1,24 @@
+extends: substitution
+message: Use '%s' instead of '%s'.
+level: warning
+ignorecase: true
+swap:
+  "SDA Platform": SDA Platform
+  "SDA SE": SDA SE
+  api: API
+  assertj: AssertJ
+  github: GitHub
+  http: HTTP
+  javascript: JavaScript
+  json: JSON
+  junit: JUnit
+  jvm: JVM
+  kafka: Kafka
+  keycloak: Keycloak
+  kubernetes: Kubernetes
+  mockito: Mockito
+  mongodb: MongoDB
+  prometheus: Prometheus
+  sda: SDA
+  wiremock: WireMock
+  yaml: YAML
