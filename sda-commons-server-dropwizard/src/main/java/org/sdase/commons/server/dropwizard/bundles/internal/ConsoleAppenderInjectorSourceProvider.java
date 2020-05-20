@@ -1,4 +1,4 @@
-package org.sdase.commons.server.dropwizard.logging;
+package org.sdase.commons.server.dropwizard.bundles.internal;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;

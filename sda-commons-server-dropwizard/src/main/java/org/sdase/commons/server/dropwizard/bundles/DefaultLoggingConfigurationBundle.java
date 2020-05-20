@@ -3,7 +3,7 @@ package org.sdase.commons.server.dropwizard.bundles;
 import io.dropwizard.Bundle;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
-import org.sdase.commons.server.dropwizard.logging.ConsoleAppenderInjectorSourceProvider;
+import org.sdase.commons.server.dropwizard.bundles.internal.ConsoleAppenderInjectorSourceProvider;
 
 /**
  * The {@code DefaultLoggingConfigurationBundle} allows to configure the console logger with the
