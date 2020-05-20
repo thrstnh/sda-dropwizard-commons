@@ -16,6 +16,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.client.Client;
 import org.sdase.commons.client.jersey.JerseyClientBundle;
+import org.sdase.commons.server.dropwizard.bundles.EnvironmentVariableConfigurationBundle;
 import org.sdase.commons.server.jaeger.JaegerBundle;
 import org.sdase.commons.server.opentracing.OpenTracingBundle;
 import org.slf4j.Logger;
@@ -63,6 +64,9 @@ public class OpenTracingApplication extends Application<Configuration> {
     //
     // Other instrumented bundles are the MorphiaBundle and the S3Bundle.
     bootstrap.addBundle(jerseyClientBundle);
+
+    // TODO: Remove this and think about an integration into the starter bundle!
+    bootstrap.addBundle(EnvironmentVariableConfigurationBundle.builder().build());
   }
 
   @Override
