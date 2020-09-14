@@ -3,6 +3,7 @@ dependencies {
   compile project(':sda-commons-server-dropwizard')
   compile project(':sda-commons-shared-error')
   compile 'io.openapitools.jackson.dataformat:jackson-dataformat-hal'
+  compile 'cglib:cglib:3.3.0'
 
   testCompile project(':sda-commons-server-testing')
   testCompile 'com.kjetland:mbknor-jackson-jsonschema_2.12', {
