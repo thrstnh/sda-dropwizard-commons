@@ -1,17 +1,21 @@
 package org.sda.commons.server.jackson.hal;
 
+import javassist.util.proxy.MethodHandler;
+import javassist.util.proxy.Proxy;
+import javassist.util.proxy.ProxyFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.ws.rs.PathParam;
+import javax.ws.rs.QueryParam;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Parameter;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.QueryParam;
-import net.sf.cglib.proxy.Enhancer;
-import net.sf.cglib.proxy.MethodInterceptor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * An utility class to process and store the invocation information of a method. It also creates and
@@ -25,15 +29,15 @@ public class HalLinkInvocationStateUtility {
       ThreadLocal.withInitial(MethodInvocationState::new);
 
   // Method Invocation Handler to process and save the current state of the method invocation
-  private static final MethodInterceptor METHOD_PROCESSING_INTERCEPTOR =
-      (obj, method, methodArguments, proxy) -> {
+  private static final MethodHandler METHOD_PROCESSING_INTERCEPTOR =
+      (obj, thisMethod, proceedMethod, methodArguments) -> {
         // Get  invocation state from current thread
         final MethodInvocationState methodInvocationState = THREAD_LOCAL_INVOCATION_STATE.get();
-        final String methodName = method.getName();
+        final String methodName = thisMethod.getName();
         methodInvocationState.setInvokedMethod(methodName);
         LOG.debug("Last invoked method '{}' added to current invocation state", methodName);
         // Process annotated query and path parameters
-        processParams(methodInvocationState, methodArguments, method.getParameters());
+        processParams(methodInvocationState, methodArguments, thisMethod.getParameters());
         methodInvocationState.processed();
         // Do nothing
         return null;
@@ -56,14 +60,26 @@ public class HalLinkInvocationStateUtility {
     return createProxy(type);
   }
 
-  @SuppressWarnings("unchecked")
   private static <T> T createProxy(Class<T> type) {
-    THREAD_LOCAL_INVOCATION_STATE.get().setType(type);
-    LOG.debug("Class type: '{}' added to the current invocation state", type);
-    Enhancer enhancer = new Enhancer();
-    enhancer.setSuperclass(type);
-    enhancer.setCallback(METHOD_PROCESSING_INTERCEPTOR);
-    return (T) enhancer.create();
+    try {
+      THREAD_LOCAL_INVOCATION_STATE.get().setType(type);
+      LOG.debug("Adding Class type '{}' to the current invocation state", type);
+      ProxyFactory factory = new ProxyFactory();
+      factory.setFilter(m -> !m.getName().equals("finalize")); // ignore finalize()
+      if (type.isInterface()) {
+        factory.setInterfaces(new Class[] {type});
+        //noinspection unchecked
+        return (T) factory.create(new Class[0], new Object[0], METHOD_PROCESSING_INTERCEPTOR);
+      }
+      else {
+        factory.setSuperclass(type);
+        Constructor<?> declaredConstructor = type.getDeclaredConstructors()[0]; // maybe search for an accessible constructor
+        //noinspection unchecked
+        return (T) factory.create(declaredConstructor.getParameterTypes(), new Object[declaredConstructor.getParameterCount()], METHOD_PROCESSING_INTERCEPTOR);
+      }
+    } catch (InvocationTargetException | InstantiationException | IllegalAccessException | NoSuchMethodException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private static void processParams(

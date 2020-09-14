@@ -10,6 +10,8 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HalLinkProviderTest {
 
@@ -99,6 +101,12 @@ interface TestApi {
 
 @Path("")
 class TestController {
+
+  private static final Logger LOG = LoggerFactory.getLogger(TestController.class);
+
+  public TestController(String foo) {
+    LOG.info("Foo: {}", foo);
+  }
 
   @Path("/testPath/{testArg}")
   @GET
