@@ -1,0 +1,195 @@
+version: 2
+registries:
+  maven-repository-nexus-intern-sda-se-online-repository-sda-se-re:
+    type: maven-repository
+    url: https://nexus.intern.sda-se.online/repository/sda-se-releases
+    username: SDABot
+    password: "${{secrets.MAVEN_REPOSITORY_NEXUS_INTERN_SDA_SE_ONLINE_REPOSITORY_SDA_SE_RE_PASSWORD}}"
+  maven-repository-nexus-intern-sda-se-online-443-repository-sda-s:
+    type: maven-repository
+    url: https://nexus.intern.sda-se.online:443/repository/sda-se-public/
+    username: depend-pub-read
+    password: "${{secrets.MAVEN_REPOSITORY_NEXUS_INTERN_SDA_SE_ONLINE_443_REPOSITORY_SDA_S_PASSWORD}}"
+  maven-repository-nexus-sda-se-io-443-repository-sda-se-public:
+    type: maven-repository
+    url: https://nexus.sda-se.io:443/repository/sda-se-public/
+    username: depend-pub-read
+    password: "${{secrets.MAVEN_REPOSITORY_NEXUS_SDA_SE_IO_443_REPOSITORY_SDA_SE_PUBLIC_PASSWORD}}"
+  maven-repository-nexus-intern-sda-se-online-repository-sda-se-pu:
+    type: maven-repository
+    url: https://nexus.intern.sda-se.online/repository/sda-se-public/
+    username: depend-pub-read
+    password: "${{secrets.MAVEN_REPOSITORY_NEXUS_INTERN_SDA_SE_ONLINE_REPOSITORY_SDA_SE_PU_PASSWORD}}"
+  maven-repository-nexus-sda-se-io-repository-sda-se-public:
+    type: maven-repository
+    url: https://nexus.sda-se.io/repository/sda-se-public/
+    username: depend-pub-read
+    password: "${{secrets.MAVEN_REPOSITORY_NEXUS_SDA_SE_IO_REPOSITORY_SDA_SE_PUBLIC_PASSWORD}}"
+
+updates:
+- package-ecosystem: gradle
+  directory: "/"
+  schedule:
+    interval: daily
+    time: "02:00"
+    timezone: Europe/Berlin
+  open-pull-requests-limit: 33
+  target-branch: master
+  ignore:
+  - dependency-name: org.scala-lang:scala-library
+    versions:
+    - ">= 2.13.a, < 2.14"
+  - dependency-name: org.scala-lang:scala-reflect
+    versions:
+    - ">= 2.13.a, < 2.14"
+  - dependency-name: com.amazonaws:aws-java-sdk-bom
+    versions:
+    - 1.11.1000
+    - 1.11.1002
+    - 1.11.1003
+    - 1.11.1005
+    - 1.11.944
+    - 1.11.946
+    - 1.11.947
+    - 1.11.948
+    - 1.11.950
+    - 1.11.951
+    - 1.11.953
+    - 1.11.954
+    - 1.11.955
+    - 1.11.957
+    - 1.11.958
+    - 1.11.959
+    - 1.11.960
+    - 1.11.961
+    - 1.11.962
+    - 1.11.963
+    - 1.11.964
+    - 1.11.965
+    - 1.11.966
+    - 1.11.967
+    - 1.11.968
+    - 1.11.969
+    - 1.11.971
+    - 1.11.972
+    - 1.11.973
+    - 1.11.974
+    - 1.11.975
+    - 1.11.976
+    - 1.11.977
+    - 1.11.978
+    - 1.11.979
+    - 1.11.980
+    - 1.11.981
+    - 1.11.982
+    - 1.11.983
+    - 1.11.987
+    - 1.11.988
+    - 1.11.990
+    - 1.11.991
+    - 1.11.992
+    - 1.11.993
+    - 1.11.994
+    - 1.11.995
+    - 1.11.996
+    - 1.11.997
+    - 1.11.998
+    - 1.11.999
+  - dependency-name: org.flywaydb:flyway-core
+    versions:
+    - 7.5.2
+    - 7.5.3
+    - 7.5.4
+    - 7.6.0
+    - 7.7.0
+    - 7.7.1
+    - 7.7.2
+    - 7.7.3
+    - 7.8.0
+    - 7.8.1
+  - dependency-name: org.jetbrains.kotlin:kotlin-bom
+    versions:
+    - 1.4.21-2
+    - 1.4.30
+    - 1.4.31
+    - 1.4.32
+  - dependency-name: io.swagger.core.v3:swagger-models
+    versions:
+    - 2.1.8
+  - dependency-name: io.swagger.core.v3:swagger-core
+    versions:
+    - 2.1.8
+  - dependency-name: io.swagger.core.v3:swagger-annotations
+    versions:
+    - 2.1.8
+  - dependency-name: io.swagger.core.v3:swagger-jaxrs2-servlet-initializer-v2
+    versions:
+    - 2.1.8
+  - dependency-name: io.swagger.core.v3:swagger-jaxrs2
+    versions:
+    - 2.1.8
+  - dependency-name: com.fasterxml.jackson.module:jackson-module-scala_2.12
+    versions:
+    - 2.12.2
+  - dependency-name: io.github.classgraph:classgraph
+    versions:
+    - 4.8.102
+    - 4.8.103
+  - dependency-name: org.jboss.weld.servlet:weld-servlet-core
+    versions:
+    - 4.0.0.Final
+  - dependency-name: org.jboss.weld.se:weld-se-core
+    versions:
+    - 4.0.0.Final
+  - dependency-name: org.apache.zookeeper:zookeeper
+    versions:
+    - 3.6.2
+  - dependency-name: org.apache.kafka:kafka-clients
+    versions:
+    - 6.0.1-ce
+    - 6.1.0-ce
+  - dependency-name: org.apache.kafka:kafka_2.12
+    versions:
+    - 6.0.1-ce
+    - 6.1.0-ce
+  - dependency-name: org.apache.curator:curator-test
+    versions:
+    - 5.1.0
+  - dependency-name: org.mongodb:mongodb-driver-legacy
+    versions:
+    - 4.2.0
+    - 4.2.1
+    - 4.2.2
+  - dependency-name: com.auth0:java-jwt
+    versions:
+    - 3.13.0
+  - dependency-name: com.diffplug.spotless
+    versions:
+    - 5.10.1
+    - 5.10.2
+  - dependency-name: org.sonarqube
+    versions:
+    - 3.1.1
+  commit-message:
+    prefix: fix
+    prefix-development: chore
+    include: scope
+  registries:
+  - maven-repository-nexus-intern-sda-se-online-repository-sda-se-re
+  - maven-repository-nexus-intern-sda-se-online-443-repository-sda-s
+  - maven-repository-nexus-sda-se-io-443-repository-sda-se-public
+  - maven-repository-nexus-intern-sda-se-online-repository-sda-se-pu
+  - maven-repository-nexus-sda-se-io-repository-sda-se-public
+- package-ecosystem: github-actions
+  directory: "/"
+  schedule:
+    interval: weekly
+    day: wednesday
+    time: "02:00"
+    timezone: Europe/Berlin
+  open-pull-requests-limit: 33
+  target-branch: master
+  commit-message:
+    prefix: chore
+    prefix-development: chore
+    include: scope
