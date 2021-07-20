@@ -97,10 +97,11 @@ mongo:
   username: "${MONGODB_USERNAME:-}"
   password: "${MONGODB_PASSWORD:-}"
   useSsl: ${MONGODB_USE_SSL:-true}
-  caCertificate: "${MONGODB_CA_CERTIFICATE:-}"
+  
+caCertificate:
+  customCaCertificateDir: "${CA_CERTIFICATE_DIR:-}"
 ```
 _Please note the double quotes around the values.
- Without them for `caCertificate`, Dropwizard will not be able to load the certificate correctly because the `MONGODB_CA_CERTIFICATE` variable contains line breaks.  
  Omitting the double quotes for other values like `password` can cause trouble in case of certain special characters (e.g. colon)_
 
 Example config for **developer** machines using [local-infra](https://github.com/SDA-SE/local-infra):
